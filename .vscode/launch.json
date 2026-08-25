@@ -1,0 +1,11 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Posture Model",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "& 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe' --app='file:///C:/Users/Dale Daniel/Repos/Posture/index.html' --window-size=1280,940"
+    }
+  ]
+}

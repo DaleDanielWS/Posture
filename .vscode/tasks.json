@@ -1,0 +1,19 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Open Posture Model in Browser",
+      "type": "shell",
+      "command": "Start-Process 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe' -ArgumentList '--app=file:///C:/Users/Dale%20Daniel/Repos/Posture/index.html','--window-size=1280,940'",
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "never",
+        "close": true
+      }
+    }
+  ]
+}

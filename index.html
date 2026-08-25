@@ -1,0 +1,2486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Posture &amp; Center of Mass — Sagittal Model</title>
+<style>
+  :root {
+    --bg: #0f141b;
+    --panel: #1a222d;
+    --panel-2: #212c3a;
+    --text: #e7eef6;
+    --muted: #8fa3b8;
+    --accent: #4db6ff;
+    --good: #35d07f;
+    --bad: #ff5d5d;
+    --line: #2c3a4c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.4 "Segoe UI", system-ui, sans-serif;
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 12px;
+    padding: 12px;
+    height: 100vh;
+    overflow: hidden;
+  }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 18px 0 8px; }
+  .stage {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 10px;
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  canvas { display: block; border-radius: 8px; background: linear-gradient(#101822, #0b1119); }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px 18px;
+    flex: 1 1 320px;
+    min-width: 300px;
+    overflow-y: auto;
+    min-height: 0;
+  }
+  .row { display: flex; align-items: center; gap: 10px; margin: 10px 0; }
+  .row label { width: 84px; color: var(--muted); font-weight: 600; }
+  .row input[type=range] { flex: 1; accent-color: var(--accent); }
+  .row .val { width: 46px; text-align: right; font-variant-numeric: tabular-nums; color: var(--text); }
+  .presets { display: flex; flex-wrap: wrap; gap: 8px; }
+  button {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #04121f; border-color: var(--accent); font-weight: 700; }
+  .readout {
+    background: var(--panel-2);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-top: 12px;
+  }
+  .readout .big { font-size: 22px; font-weight: 700; }
+  .stat { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dashed var(--line); }
+  .stat:last-child { border-bottom: 0; }
+  .stat span:first-child { color: var(--muted); }
+  .pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-weight: 700; font-size: 12px; }
+  .pill.good { background: rgba(53,208,127,.15); color: var(--good); }
+  .pill.bad  { background: rgba(255,93,93,.15); color: var(--bad); }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 10px; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  .row.mode { margin: 6px 0 4px; }
+  .toggle-btn {
+    width: 100%;
+    padding: 10px 14px;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: .03em;
+  }
+  .toggle-btn.on {
+    background: var(--good);
+    border-color: var(--good);
+    color: #04120a;
+  }
+  .slots { margin-top: 8px; }
+  .mini { padding: 5px 9px; font-size: 12px; }
+  .mini.has { border-color: var(--good); color: var(--good); }
+  .toggle-btn:disabled { opacity: .35; cursor: default; }
+  input[type=range]:disabled { opacity: .5; }
+  details.cosmetics { margin: 14px 0 4px; }
+  details.cosmetics summary {
+    cursor: pointer;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--muted);
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  details.cosmetics summary:hover { color: var(--accent); }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <canvas id="c" width="780" height="760"></canvas>
+    <div class="legend">
+      <span><i style="background:#4db6ff"></i>Center of mass</span>
+      <span><i style="background:#35d07f"></i>Base of support</span>
+      <span><i style="background:#ff5d5d"></i>Plumb line</span>
+      <span><i style="background:#ffe14d"></i>Fascial lines</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h1>Posture &amp; Center of Mass</h1>
+    <div class="hint">Side view, facing right. Left-click a rotation knob to engage it — it glows green — then tap ← / → for 1° steps, or drag the knob. Right-click to disengage. Watch how posture shifts the center of mass.</div>
+
+    <h2>Mode</h2>
+    <div class="row mode">
+      <button id="modePose" class="toggle-btn on">Pose</button>
+      <button id="modeWalk" class="toggle-btn">Walk</button>
+      <button id="modeRun" class="toggle-btn">Run</button>
+      <button id="modeQwop" class="toggle-btn">QWOP</button>
+    </div>
+    <div class="row mode">
+      <button id="autoBalanceBtn" class="toggle-btn">Auto-balance: OFF</button>
+      <button id="fasciaBtn" class="toggle-btn">Fascia Enforcement: OFF</button>
+    </div>
+
+    <details class="cosmetics">
+      <summary>Cosmetics</summary>
+      <div class="row mode">
+        <button id="modelBtn" class="toggle-btn">Model: Guy</button>
+        <button id="hatBtn" class="toggle-btn">Hat: None</button>
+        <button id="eyesBtn" class="toggle-btn">Eyes: None</button>
+      </div>
+      <div class="row mode">
+        <label for="shirtColor" style="color:var(--muted);font-weight:600">Shirt</label>
+        <input type="color" id="shirtColor" value="#b5484d" style="width:36px;height:28px;padding:0;border:1px solid var(--muted);border-radius:6px;background:none;cursor:pointer" />
+        <label for="skinColor" style="color:var(--muted);font-weight:600;margin-left:8px">Skin</label>
+        <input type="color" id="skinColor" value="#d8c3a5" style="width:36px;height:28px;padding:0;border:1px solid var(--muted);border-radius:6px;background:none;cursor:pointer" />
+      </div>
+    </details>
+    <div class="hint" id="modeHint">Off: joints move independently. On: rotate one joint and the rest of the body automatically counter-rotates (ankle/hip strategy) to keep the center of mass over the feet.</div>
+
+    <div id="gaitControls" style="display:none">
+      <div class="row">
+        <label for="s_cadence">Cadence</label>
+        <input id="s_cadence" type="range" min="80" max="140" step="2" value="112" />
+        <span class="val" id="v_cadence">112</span>
+      </div>
+      <div class="row">
+        <label for="s_slowmo">Slow-mo</label>
+        <input id="s_slowmo" type="range" min="0" max="100" step="1" value="100" />
+        <span class="val" id="v_slowmo">100%</span>
+      </div>
+      <div class="row">
+        <button id="pauseBtn" class="mini">&#9208; Pause</button>
+        <input id="s_phase" type="range" min="0" max="100" step="1" value="0" style="flex:1" />
+        <span class="val" id="v_phase">0%</span>
+      </div>
+      <div class="hint">Space pauses; scrub the cycle slider while paused. All posture sliders layer onto the gait — knee/ankle offset BOTH legs (try +20 knee for a crouch walk, −20 ankle for toe-walking).</div>
+    </div>
+
+    <h2>Joint angles (° forward +)</h2>
+    <div id="sliders"></div>
+
+    <h2>Presets</h2>
+    <div class="presets">
+      <button data-preset="neutral">Neutral</button>
+      <button data-preset="forwardHead">Forward head</button>
+      <button data-preset="slouch">Slouched</button>
+      <button data-preset="swayback">Swayback</button>
+      <button data-preset="military">Over-erect</button>
+    </div>
+    <div class="presets slots">
+      <button id="save1" class="mini">Save 1</button>
+      <button id="pos1" class="mini">Pos 1</button>
+      <button id="save2" class="mini">Save 2</button>
+      <button id="pos2" class="mini">Pos 2</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <label for="s_height">Height</label>
+      <input id="s_height" type="range" min="58" max="80" step="1" value="70" />
+      <span class="val" id="v_height">5′10″</span>
+    </div>
+
+    <div class="readout" id="poseReadout">
+      <div class="stat"><span>Balance</span><span id="balance" class="pill good">—</span></div>
+      <div class="stat"><span>Height (5'10" neutral)</span><span id="stature">—</span></div>
+      <div class="stat"><span>COM offset from ankle</span><span id="offset">0.0 cm</span></div>
+      <div class="stat"><span>COM height</span><span id="height">0.0 cm</span></div>
+      <div class="stat"><span>Plumb vs. base</span><span id="plumb">centered</span></div>
+    </div>
+    <div class="readout" id="gaitReadout" style="display:none">
+      <div class="stat"><span>Support</span><span id="g_support" class="pill good">—</span></div>
+      <div class="stat"><span>Speed</span><span id="g_speed">—</span></div>
+      <div class="stat"><span>Cadence</span><span id="g_cadence">—</span></div>
+      <div class="stat"><span>Stride length</span><span id="g_stride">—</span></div>
+      <div class="stat"><span>COM vertical travel</span><span id="g_bounce">—</span></div>
+      <div class="stat"><span>Peak ground reaction</span><span id="g_grf">—</span></div>
+    </div>
+    <div class="readout" id="qwopReadout" style="display:none">
+      <div class="stat"><span>Status</span><span id="q_status" class="pill good">READY</span></div>
+      <div class="stat"><span>Distance</span><span id="q_dist">0.0 m</span></div>
+      <div class="stat"><span>Best</span><span id="q_best">0.0 m</span></div>
+      <div class="stat"><span>Speed</span><span id="q_speed">0.00 m/s</span></div>
+    </div>
+    <div class="hint">Green vertical band = base of support (heel to toe). When the blue center-of-mass plumb line leaves that band, the model is off balance — the body must strain, shift, or fall.</div>
+  </div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+// Logical drawing space: all coordinates in the file live in this fixed 780x760
+// system. fitCanvas() scales the backing store (DPR-aware) so the canvas fills
+// the window height with zero blank space at any window size.
+const VIEW_W = 780, VIEW_H = 760;
+function fitCanvas() {
+  const stage = document.querySelector('.stage');
+  const legend = document.querySelector('.legend');
+  const availH = stage.clientHeight - legend.offsetHeight - 20 - 8; // stage padding + legend gap
+  const availW = window.innerWidth - 24 - 22 - 12 - 312;            // body pad, stage pad, gap, min panel
+  const scale = Math.max(0.4, Math.min(availH / VIEW_H, availW / VIEW_W));
+  const dpr = window.devicePixelRatio || 1;
+  canvas.style.width = Math.round(VIEW_W * scale) + 'px';
+  canvas.style.height = Math.round(VIEW_H * scale) + 'px';
+  canvas.width = Math.round(VIEW_W * scale * dpr);
+  canvas.height = Math.round(VIEW_H * scale * dpr);
+  ctx.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
+}
+window.addEventListener('resize', () => { fitCanvas(); draw(); });
+
+// ---- Human-figure drawing helpers ----
+const SKIN_BASE = '#d8c3a5';
+let SKIN = SKIN_BASE;
+let SKIN_DK = '#b89b78';
+const OUTLINE = '#7d6a4f';
+
+function unit(ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay, L = Math.hypot(dx, dy) || 1;
+  return { x: dx / L, y: dy / L, L };
+}
+
+// Tapered "capsule" between two points with end radii r0/r1 (rounded ends).
+function limb(p0, r0, p1, r1) {
+  const u = unit(p0.x, p0.y, p1.x, p1.y);
+  const px = -u.y, py = u.x; // perpendicular
+  ctx.beginPath();
+  ctx.arc(p0.x, p0.y, r0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(p1.x, p1.y, r1, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(p0.x + px * r0, p0.y + py * r0);
+  ctx.lineTo(p1.x + px * r1, p1.y + py * r1);
+  ctx.lineTo(p1.x - px * r1, p1.y - py * r1);
+  ctx.lineTo(p0.x - px * r0, p0.y - py * r0);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function blob(p, r) {
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// ---- Hair sprites: rendered once offscreen; drop real PNGs in assets/ to override ----
+const hairSprites = {};
+function hairSprite(kind) {
+  if (hairSprites[kind]) return hairSprites[kind];
+  const cv = document.createElement('canvas');
+  cv.width = 150; cv.height = 170;
+  const g = cv.getContext('2d');
+  const X = f => 70 + f, Y = u => 90 - u; // head-local: f forward, u up
+  const grad = g.createLinearGradient(X(0), Y(40), X(0), Y(-20));
+  grad.addColorStop(0, '#5a4732');
+  grad.addColorStop(1, '#33261a');
+  g.fillStyle = grad;
+  if (kind === 'girl') {
+    // Swept-back updo: hair fully covers the crown and gathers into a high bun.
+    g.beginPath();
+    g.moveTo(X(18), Y(24));                             // front hairline
+    g.quadraticCurveTo(X(0), Y(48), X(-16), Y(30));     // high over the crown
+    g.quadraticCurveTo(X(-27), Y(20), X(-23), Y(4));    // back of head
+    g.quadraticCurveTo(X(-21), Y(-7), X(-14), Y(-7));   // nape
+    g.lineTo(X(-13), Y(-2));
+    g.quadraticCurveTo(X(-17), Y(10), X(-7), Y(20));    // inner edge along skull
+    g.quadraticCurveTo(X(2), Y(26), X(18), Y(24));
+    g.closePath();
+    g.fill();
+    // Bun at the upper back of the head.
+    g.beginPath(); g.arc(X(-26), Y(26), 11, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.arc(X(-31), Y(19), 6, 0, Math.PI * 2); g.fill();  // wisp under bun
+    // Hair tie at the bun base.
+    g.fillStyle = '#8a2f4f';
+    g.beginPath(); g.ellipse(X(-19), Y(21), 3, 5, -0.6, 0, Math.PI * 2); g.fill();
+    // Sweep strands flowing toward the bun.
+    g.strokeStyle = 'rgba(255,255,255,.15)';
+    g.lineWidth = 1.8;
+    g.beginPath(); g.moveTo(X(12), Y(30)); g.quadraticCurveTo(X(-6), Y(38), X(-20), Y(27)); g.stroke();
+    g.beginPath(); g.moveTo(X(10), Y(26)); g.quadraticCurveTo(X(-4), Y(30), X(-17), Y(18)); g.stroke();
+    g.beginPath(); g.moveTo(X(13), Y(28)); g.quadraticCurveTo(X(-2), Y(34), X(-19), Y(22)); g.stroke();
+    // Bun highlight.
+    g.beginPath(); g.arc(X(-26), Y(26), 7, -2.4, -0.6); g.stroke();
+  }
+  // Guy: bald — no procedural hair (drop assets/hair-guy.png to add some).
+  hairSprites[kind] = cv;
+  return cv;
+}
+// Optional real PNG overrides (150x170, head center at 70,90).
+for (const kind of ['guy', 'girl']) {
+  const img = new Image();
+  img.onload = () => { hairSprites[kind] = img; draw(); };
+  img.src = 'assets/hair-' + kind + '.png';
+}
+
+// Scale: pixels per cm — calibrated below so neutral standing height = 5'10" (177.8 cm).
+
+// Kinematic chain, bottom -> top. Each joint rotates everything above it.
+// length in px, mass = relative body-mass fraction, com = fraction of length from lower end.
+const JOINTS = [
+  { key: 'ankle',    label: 'Ankle' },
+  { key: 'knee',     label: 'Knee' },
+  { key: 'hip',      label: 'Hip' },
+  { key: 'abs',      label: 'Abs-Spine' },
+  { key: 'shoulder', label: 'Shoulders' },
+  { key: 'neck',     label: 'Neck' },
+];
+
+// Segment above each joint (index-aligned with JOINTS).
+const SEGMENTS = [
+  { name: 'shank',      len: 135, mass: 9,  com: 0.43 },
+  { name: 'thigh',      len: 130, mass: 20, com: 0.43 },
+  { name: 'lowerTrunk', len: 95,  mass: 24, com: 0.50 },
+  { name: 'upperTrunk', len: 115, mass: 24, com: 0.55 },
+  { name: 'neck',       len: 28,  mass: 3,  com: 0.50 },
+  { name: 'head',       len: 60,  mass: 9,  com: 0.55 },
+];
+
+// Foot: fixed base of support.
+const FOOT = { heelBack: 42, toeFront: 108, mass: 3, comFwd: 20 };
+// Functional balance window (tighter than the drawn shoe): heel to ball of foot.
+const BOS = { back: 22, front: 62 };
+// Arms hang vertically from the shoulder point, hands reaching hip level.
+const ARM = { len: 185, mass: 10, com: 0.45 };
+
+const angles = { ankle: 0, knee: 0, hip: 0, abs: 0, shoulder: 0, neck: 0 };
+let heightScale = 1; // scales segment/arm lengths; body girth stays constant
+
+const PRESETS = {
+  neutral:     { ankle: 0,  knee: 0,   hip: 0,   abs: 0,   shoulder: 0,  neck: 0 },
+  forwardHead: { ankle: 0,  knee: 0,   hip: 0,   abs: 3,   shoulder: 12, neck: 26 },
+  slouch:      { ankle: 2,  knee: -6,  hip: -12, abs: 16,  shoulder: 22, neck: 22 },
+  swayback:    { ankle: -3, knee: 4,   hip: 14,  abs: -14, shoulder: 10, neck: 12 },
+  military:    { ankle: -2, knee: 2,   hip: -6,  abs: -12, shoulder: -10, neck: -6 },
+};
+
+// Ankle pivot (fixed) in canvas coords.
+const ANKLE = { x: 200, y: 688 };
+const GROUND_Y = ANKLE.y + 8;
+const STATURE_CM = 177.8; // 5'10" at neutral
+// Neutral height measured to the drawn skull crown (crown sits at the chain tip).
+const PX_PER_CM = (GROUND_Y - ANKLE.y + SEGMENTS.reduce((s, x) => s + x.len, 0)) / STATURE_CM;
+
+// Seated twin (right third of canvas): same joint angles over a sitting base pose.
+const SEAT_ANKLE = { x: 640, y: 688 };
+const SEAT_OFFSETS = { knee: -90, hip: 90 };
+
+const DEG = Math.PI / 180;
+
+// Distributed load: mass spread along the segment with linear density whose
+// centroid matches the anthropometric COM fraction (valid for fractions 1/3..2/3).
+function distribute(p0, p1, mass, comFrac, out) {
+  const K = 6;
+  const a = 4 - 6 * comFrac, b = 6 * (2 * comFrac - 1);
+  for (let i = 0; i < K; i++) {
+    const t = (i + 0.5) / K;
+    out.push({ x: p0.x + (p1.x - p0.x) * t, y: p0.y + (p1.y - p0.y) * t,
+               mass: mass * (a + b * t) / K });
+  }
+}
+
+function computeChain(origin, offsets) {
+  origin = origin || ANKLE;
+  // Returns points[] (joint positions), distributed mass samples, foot & arm data.
+  const pts = [{ x: origin.x, y: origin.y }];
+  const segCOMs = [];
+  let cum = 0; // cumulative global angle from vertical, forward positive.
+  let p = pts[0];
+
+  for (let i = 0; i < SEGMENTS.length; i++) {
+    cum += ((angles[JOINTS[i].key] || 0) + (offsets ? (offsets[JOINTS[i].key] || 0) : 0)) * DEG;
+    const dir = { x: Math.sin(cum), y: -Math.cos(cum) };
+    const seg = SEGMENTS[i];
+    const L = seg.len * heightScale;
+    const next = { x: p.x + dir.x * L, y: p.y + dir.y * L };
+    distribute(p, next, seg.mass, seg.com, segCOMs);
+    pts.push(next);
+    p = next;
+
+    // Shoulder point (top of upperTrunk, index 3 -> pts[4]) anchors the arms.
+  }
+
+  // Arms hang straight down from the shoulder point (pts[4]).
+  const shoulder = pts[4];
+  const armLen = ARM.len * heightScale;
+  const arm = {
+    top: shoulder,
+    bottom: { x: shoulder.x, y: shoulder.y + armLen },
+  };
+  distribute(arm.top, arm.bottom, ARM.mass, ARM.com, segCOMs);
+
+  // Foot COM (fixed, forward of ankle on the ground).
+  const footCOM = { x: origin.x + FOOT.comFwd, y: GROUND_Y - 6, mass: FOOT.mass };
+
+  // Whole-body COM.
+  let mx = 0, my = 0, m = 0;
+  for (const s of segCOMs) { mx += s.x * s.mass; my += s.y * s.mass; m += s.mass; }
+  mx += footCOM.x * footCOM.mass; my += footCOM.y * footCOM.mass; m += footCOM.mass;
+  const com = { x: mx / m, y: my / m };
+
+  return { pts, segCOMs, arm, footCOM, com };
+}
+
+function drawFigureBody(pts, arm, origin) {
+  // Drawn shoe: shorter than FOOT's physics span so the proportions read right.
+  const heelX = origin.x - 17;
+  const toeX = origin.x + 68;
+
+  // Shoe upper (side profile, toe forward +x).
+  ctx.fillStyle = '#3a4657';
+  ctx.beginPath();
+  ctx.moveTo(heelX + 2, GROUND_Y - 2);
+  ctx.lineTo(toeX - 14, GROUND_Y - 2);
+  ctx.quadraticCurveTo(toeX + 2, GROUND_Y - 2, toeX - 2, GROUND_Y - 12);      // rounded toe cap
+  ctx.quadraticCurveTo(toeX - 12, GROUND_Y - 18, origin.x + 26, GROUND_Y - 18); // toe box top
+  ctx.quadraticCurveTo(origin.x + 12, GROUND_Y - 20, origin.x + 8, GROUND_Y - 26); // instep rise
+  ctx.lineTo(origin.x - 8, GROUND_Y - 26);                                     // ankle opening
+  ctx.quadraticCurveTo(heelX + 2, GROUND_Y - 24, heelX - 2, GROUND_Y - 12);    // heel counter
+  ctx.quadraticCurveTo(heelX - 4, GROUND_Y - 4, heelX + 2, GROUND_Y - 2);
+  ctx.closePath();
+  ctx.fill();
+  // Sole: flat band with a wrapped toe.
+  ctx.fillStyle = '#e7eef6';
+  ctx.beginPath();
+  ctx.moveTo(heelX - 2, GROUND_Y);
+  ctx.lineTo(toeX, GROUND_Y);
+  ctx.quadraticCurveTo(toeX + 4, GROUND_Y - 2, toeX + 1, GROUND_Y - 7);
+  ctx.lineTo(heelX, GROUND_Y - 6);
+  ctx.quadraticCurveTo(heelX - 4, GROUND_Y - 3, heelX - 2, GROUND_Y);
+  ctx.closePath();
+  ctx.fill();
+  // Laces.
+  ctx.strokeStyle = '#9fb2c6';
+  ctx.lineWidth = 2;
+  for (let k = 0; k < 3; k++) {
+    ctx.beginPath();
+    ctx.moveTo(origin.x + 10 + k * 7, GROUND_Y - 22 + k * 2);
+    ctx.lineTo(origin.x + 16 + k * 7, GROUND_Y - 14 + k * 2);
+    ctx.stroke();
+  }
+  // Ankle collar.
+  ctx.fillStyle = '#2c3646';
+  ctx.beginPath();
+  ctx.ellipse(origin.x, GROUND_Y - 26, 11, 4.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  const ankle = pts[0], knee = pts[1], hip = pts[2];
+  const absP = pts[3], shoulder = pts[4], neckBase = pts[5], headTop = pts[6];
+
+  // ---- Body (single merged skin-tone silhouette) ----
+  ctx.fillStyle = SKIN;
+
+  const PANTS = femme ? '#5b4a78' : '#4a6da7';
+  const PANTS_DK = femme ? '#3d3054' : '#2e4468';
+  const SHIRT = shirtColors[femme ? 'girl' : 'guy'];
+  const SHIRT_DK = darken(SHIRT, 0.22);
+
+  // Legs in pants, slightly loose over the skin radii.
+  ctx.fillStyle = PANTS;
+  limb(ankle, 11, knee, 15);         // pant leg lower
+  limb(knee, 15, hip, 23);           // pant leg upper
+  blob(knee, 14);                    // knee
+  blob(hip, femme ? 28 : 26);        // seat
+
+  // Waist point partway up the lower trunk; pants rise to it.
+  const waist = { x: hip.x + (absP.x - hip.x) * 0.45, y: hip.y + (absP.y - hip.y) * 0.45 };
+  limb(hip, 26, waist, 23);          // pants over lower belly
+  const wu = unit(hip.x, hip.y, absP.x, absP.y);
+
+  // Neck first so the shirt collar overlaps its base.
+  ctx.fillStyle = SKIN;
+  limb(shoulder, 11, neckBase, 10);
+
+  // Torso in shirt, hem sitting just above the waistband.
+  ctx.fillStyle = SHIRT;
+  limb({ x: waist.x + wu.x * 12, y: waist.y + wu.y * 12 }, 22, absP, 23);
+  limb(absP, 23, shoulder, 27);      // shirt over chest
+  // Shoulder mass rides up beside the neck base.
+  const tu = unit(absP.x, absP.y, shoulder.x, shoulder.y);
+  blob({ x: shoulder.x + tu.x * 6, y: shoulder.y + tu.y * 6 }, femme ? 22 : 24);
+  if (femme) blob({ x: absP.x + (shoulder.x - absP.x) * 0.6 + 13,
+                    y: absP.y + (shoulder.y - absP.y) * 0.6 }, 11); // chest
+  // Belly bulge under the shirt.
+  blob({ x: absP.x + 9, y: absP.y + 5 }, femme ? 10 : 12);
+  // Hem line: darker stripe at the shirt's bottom edge.
+  ctx.fillStyle = SHIRT_DK;
+  limb({ x: waist.x + wu.x * 12, y: waist.y + wu.y * 12 }, 22,
+       { x: waist.x + wu.x * 17, y: waist.y + wu.y * 17 }, 22);
+
+  // Near-side arm, sleeveless: centered on the torso in profile.
+  const aTop = arm.top;
+  const A = t => ({ x: aTop.x + (arm.bottom.x - aTop.x) * t,
+                    y: aTop.y + (arm.bottom.y - aTop.y) * t });
+  const bicep = A(0.34);
+  const elbow = A(0.48); elbow.x -= 3;      // slight natural bend
+  const wrist = A(0.88); wrist.x += 4;
+  ctx.fillStyle = SKIN_DK;
+  blob(A(0.04), 13);                        // bare shoulder cap
+  limb(A(0.04), 12, bicep, femme ? 9 : 10); // upper arm
+  blob({ x: bicep.x + 1, y: bicep.y }, femme ? 9 : 10);  // bicep
+  limb(bicep, femme ? 8.5 : 9.5, elbow, 8);
+  blob(elbow, 8);
+  limb(elbow, 8, wrist, 5.5);               // forearm tapers to wrist
+  blob({ x: wrist.x + 1, y: wrist.y + 8 }, 9); // hand
+
+  drawHead(neckBase, headTop);
+}
+
+// Head with face profile (faces +x / right) — shared by the pose and gait figures.
+function drawHead(neckBase, headTop) {
+  const upv = unit(neckBase.x, neckBase.y, headTop.x, headTop.y);
+  const fwd = { x: -upv.y, y: upv.x };
+  const hc = { x: neckBase.x + upv.x * 27, y: neckBase.y + upv.y * 27 };
+  const P = (f, u) => ({ x: hc.x + fwd.x * f + upv.x * u, y: hc.y + fwd.y * f + upv.y * u });
+
+  // Skull: round cranium (ellipse) merged with a soft face wedge.
+  ctx.fillStyle = SKIN;
+  ctx.beginPath();
+  ctx.ellipse(P(-1, 12).x, P(-1, 12).y, 23, 21, Math.atan2(fwd.y, fwd.x), 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(P(20, 10).x, P(20, 10).y);                                    // brow
+  ctx.quadraticCurveTo(P(25, 5).x, P(25, 5).y, P(25, 0).x, P(25, 0).y);    // small nose
+  ctx.quadraticCurveTo(P(22, -4).x, P(22, -4).y, P(21, -8).x, P(21, -8).y);
+  ctx.quadraticCurveTo(P(21, -14).x, P(21, -14).y, P(16, -19).x, P(16, -19).y); // chin
+  ctx.lineTo(P(-4, -17).x, P(-4, -17).y);                                       // straight jawline
+  ctx.quadraticCurveTo(P(-11, -13).x, P(-11, -13).y, P(-12, -6).x, P(-12, -6).y); // jaw corner
+  ctx.lineTo(P(-14, 6).x, P(-14, 6).y);
+  ctx.lineTo(P(8, 16).x, P(8, 16).y);
+  ctx.closePath();
+  ctx.fill();
+
+  // Haircut: pre-rendered sprite, rotated with the head.
+  ctx.save();
+  ctx.translate(hc.x, hc.y);
+  ctx.rotate(Math.atan2(fwd.y, fwd.x));
+  ctx.drawImage(hairSprite(femme ? 'girl' : 'guy'), -70, -90);
+  drawHat();
+  ctx.restore();
+
+  // Ear: top edge rides just above eye level.
+  ctx.fillStyle = SKIN_DK;
+  const ear = P(-4, 6);
+  ctx.beginPath(); ctx.arc(ear.x, ear.y, 4.5, 0, Math.PI * 2); ctx.fill();
+
+  // Eye + brow.
+  const eye = P(13, 5);
+  ctx.fillStyle = '#2a2a2a';
+  ctx.beginPath(); ctx.arc(eye.x, eye.y, 2.4, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#4a3a2a';
+  ctx.lineWidth = 2.5;
+  const b0 = P(8, 11), b1 = P(18, 10);
+  ctx.beginPath(); ctx.moveTo(b0.x, b0.y); ctx.lineTo(b1.x, b1.y); ctx.stroke();
+
+  // Eyewear (rotates with the head via P()).
+  const eyewear = EYEWEAR[eyeIdx];
+  if (eyewear === 'Glasses' || eyewear === 'Sunglasses') {
+    ctx.strokeStyle = '#1c242e';
+    ctx.lineWidth = 2;
+    if (eyewear === 'Sunglasses') {
+      ctx.fillStyle = 'rgba(15,20,26,.92)';
+      ctx.beginPath(); ctx.arc(eye.x, eye.y, 7, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.beginPath(); ctx.arc(eye.x, eye.y, 7, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath();                                   // temple arm over the ear...
+    ctx.moveTo(P(6.5, 6.5).x, P(6.5, 6.5).y);
+    ctx.lineTo(P(-3, 7).x, P(-3, 7).y);
+    ctx.quadraticCurveTo(P(-8, 6).x, P(-8, 6).y, P(-8, 0).x, P(-8, 0).y);   // ...hooking behind it
+    ctx.stroke();
+    ctx.beginPath();                                   // bridge to the nose
+    ctx.moveTo(P(19.5, 6.5).x, P(19.5, 6.5).y);
+    ctx.lineTo(P(23, 4).x, P(23, 4).y);
+    ctx.stroke();
+  } else if (eyewear === 'Eye Patch') {
+    ctx.fillStyle = '#14181e';
+    ctx.beginPath(); ctx.arc(eye.x, eye.y, 6.5, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#14181e';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();                                   // strap over the forehead
+    ctx.moveTo(P(9, 9).x, P(9, 9).y);
+    ctx.lineTo(P(-8, 22).x, P(-8, 22).y);
+    ctx.stroke();
+    ctx.beginPath();                                   // strap toward the ear
+    ctx.moveTo(P(9, 1).x, P(9, 1).y);
+    ctx.lineTo(P(-4, 3).x, P(-4, 3).y);
+    ctx.stroke();
+  }
+
+  // Smile: mouth corner pulled up and back.
+  ctx.strokeStyle = '#8a5a44';
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(P(22, -6.5).x, P(22, -6.5).y);
+  ctx.quadraticCurveTo(P(17, -10.5).x, P(17, -10.5).y, P(12, -8).x, P(12, -8).y);
+  ctx.stroke();
+
+  // Jawline definition shadow.
+  ctx.strokeStyle = SKIN_DK;
+  ctx.lineWidth = 1.8;
+  ctx.beginPath();
+  ctx.moveTo(P(-9, -12).x, P(-9, -12).y);
+  ctx.quadraticCurveTo(P(0, -18).x, P(0, -18).y, P(13, -18).x, P(13, -18).y);
+  ctx.stroke();
+}
+
+const HATS = ['None', 'Cowboy', 'Flat Bill', 'Backwards', 'Beanie'];
+let hatIdx = 0;
+const EYEWEAR = ['None', 'Glasses', 'Sunglasses', 'Eye Patch'];
+let eyeIdx = 0;
+
+// Drawn in head-local coords: +x forward, -y up, skull center ~(-1,-12), crown ~y=-33.
+function drawHat() {
+  const hat = HATS[hatIdx];
+  if (hat === 'None') return;
+
+  if (hat === 'Cowboy') {
+    ctx.fillStyle = '#6f5233';
+    ctx.beginPath();
+    ctx.ellipse(-1, -27, 37, 7, 0, 0, Math.PI * 2);   // wide brim
+    ctx.fill();
+    ctx.fillStyle = '#8a6b47';
+    ctx.beginPath();                                   // creased crown
+    ctx.moveTo(-19, -27);
+    ctx.quadraticCurveTo(-21, -50, -12, -52);
+    ctx.quadraticCurveTo(-1, -45, 10, -52);
+    ctx.quadraticCurveTo(19, -50, 17, -27);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#4e3a24';
+    ctx.fillRect(-19, -33, 36, 5);                     // hat band
+  } else if (hat === 'Flat Bill' || hat === 'Backwards') {
+    ctx.fillStyle = '#34495e';
+    ctx.beginPath();
+    ctx.arc(-1, -27, 25, Math.PI, 0);                  // dome
+    ctx.closePath();
+    ctx.fill();
+    if (hat === 'Flat Bill') {
+      ctx.fillRect(10, -31, 33, 6);                    // bill forward
+    } else {
+      ctx.fillRect(-44, -31, 33, 6);                   // bill backward
+      ctx.fillStyle = '#2c3e50';
+      ctx.fillRect(6, -32, 18, 7);                     // snapback strap at front
+    }
+    ctx.fillStyle = '#2c3e50';
+    ctx.beginPath(); ctx.arc(-1, -52, 3, 0, Math.PI * 2); ctx.fill(); // button
+  } else if (hat === 'Beanie') {
+    ctx.fillStyle = '#3a8f85';
+    ctx.beginPath();
+    ctx.arc(-1, -25, 26, Math.PI, 0);                  // dome
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#2f746c';
+    ctx.fillRect(-27, -30, 52, 8);                     // folded cuff
+    ctx.fillStyle = '#e7eef6';
+    ctx.beginPath(); ctx.arc(-1, -53, 5, 0, Math.PI * 2); ctx.fill(); // pom
+  }
+}
+
+function drawBaseBand(baseL, baseR) {
+  ctx.fillStyle = 'rgba(53,208,127,.14)';
+  ctx.fillRect(baseL, 0, baseR - baseL, VIEW_H);
+  ctx.strokeStyle = 'rgba(53,208,127,.55)';
+  ctx.setLineDash([5, 5]);
+  ctx.beginPath(); ctx.moveTo(baseL, 0); ctx.lineTo(baseL, GROUND_Y); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(baseR, 0); ctx.lineTo(baseR, GROUND_Y); ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function drawCOM(com, baseL, baseR) {
+  const balanced = com.x >= baseL && com.x <= baseR;
+
+  // Plumb line from COM to ground.
+  ctx.strokeStyle = balanced ? 'rgba(77,182,255,.8)' : 'rgba(255,93,93,.9)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 4]);
+  ctx.beginPath(); ctx.moveTo(com.x, com.y); ctx.lineTo(com.x, GROUND_Y); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // COM marker.
+  ctx.beginPath();
+  ctx.arc(com.x, com.y, 8, 0, Math.PI * 2);
+  ctx.fillStyle = balanced ? '#4db6ff' : '#ff5d5d';
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#04121f';
+  ctx.stroke();
+  // Crosshair.
+  ctx.strokeStyle = '#04121f';
+  ctx.beginPath();
+  ctx.moveTo(com.x - 5, com.y); ctx.lineTo(com.x + 5, com.y);
+  ctx.moveTo(com.x, com.y - 5); ctx.lineTo(com.x, com.y + 5);
+  ctx.stroke();
+  return balanced;
+}
+
+function drawStool(hip) {
+  const seatY = hip.y + 24;
+  ctx.fillStyle = '#7a5230';
+  ctx.fillRect(hip.x - 58, seatY, 116, 12);
+  ctx.fillStyle = '#5d3f24';
+  ctx.fillRect(hip.x - 50, seatY + 12, 7, GROUND_Y - seatY - 12);
+  ctx.fillRect(hip.x + 43, seatY + 12, 7, GROUND_Y - seatY - 12);
+}
+
+function draw() {
+  if (mode === 'qwop') { drawQwop(); return; }
+  if (mode !== 'pose') { drawGait(); return; }
+  const { pts, segCOMs, arm, com } = computeChain();
+  ctx.clearRect(0, 0, VIEW_W, VIEW_H);
+
+  // Ground.
+  ctx.strokeStyle = '#33465c';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(0, GROUND_Y); ctx.lineTo(VIEW_W, GROUND_Y); ctx.stroke();
+
+  // ---- Standing figure ----
+  const heelX = ANKLE.x - BOS.back;
+  const toeX = ANKLE.x + BOS.front;
+  drawBaseBand(heelX, toeX);
+  drawFigureBody(pts, arm, ANKLE);
+  if (fascia) drawFascia(pts);
+
+  drawDials(pts, null);
+  drawHandles(pts, 'stand');
+  finishDraw(pts, segCOMs, arm, com);
+}
+
+function drawDials(pts, offsets) {
+  // ---- Gimbal dials: each shows neutral tick, rotation wedge, needle, and degrees ----
+  let cumBelow = 0;
+  for (let i = 0; i < JOINTS.length; i++) {
+    const pt = pts[i];
+    const rel = angles[JOINTS[i].key] || 0;
+    const off = offsets ? (offsets[JOINTS[i].key] || 0) : 0;
+    // Neutral = segment direction with this joint's user angle at 0 (base pose kept).
+    const neutralA = (cumBelow + off - 90) * DEG;
+    const currentA = (cumBelow + off + rel - 90) * DEG;
+    cumBelow += rel + off;
+    const R = 9;
+
+    // Dial face.
+    ctx.beginPath();
+    ctx.arc(pt.x, pt.y, R, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(10,15,22,.55)';
+    ctx.fill();
+    ctx.lineWidth = selected === i ? 2.5 : 1.2;
+    ctx.strokeStyle = selected === i ? '#35d07f' : 'rgba(77,182,255,.7)';
+    ctx.stroke();
+
+    // Rotation wedge from neutral to current (amber = forward, blue = backward).
+    if (Math.abs(rel) > 0.5) {
+      ctx.beginPath();
+      ctx.moveTo(pt.x, pt.y);
+      ctx.arc(pt.x, pt.y, R - 1, neutralA, currentA, rel < 0);
+      ctx.closePath();
+      ctx.fillStyle = rel > 0 ? 'rgba(245,196,81,.55)' : 'rgba(77,182,255,.45)';
+      ctx.fill();
+    }
+
+    // Neutral tick.
+    ctx.strokeStyle = 'rgba(200,215,230,.8)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(pt.x + Math.cos(neutralA) * (R - 4), pt.y + Math.sin(neutralA) * (R - 4));
+    ctx.lineTo(pt.x + Math.cos(neutralA) * R, pt.y + Math.sin(neutralA) * R);
+    ctx.stroke();
+
+    // Needle at current rotation.
+    ctx.strokeStyle = rel > 0.5 ? '#f5c451' : rel < -0.5 ? '#4db6ff' : '#c7d6e6';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(pt.x, pt.y);
+    ctx.lineTo(pt.x + Math.cos(currentA) * R, pt.y + Math.sin(currentA) * R);
+    ctx.stroke();
+
+    // Hub.
+    ctx.beginPath();
+    ctx.arc(pt.x, pt.y, 1.8, 0, Math.PI * 2);
+    ctx.fillStyle = '#e7eef6';
+    ctx.fill();
+
+    // Degree label to the left of the joint (away from the face/front).
+    const txt = (rel > 0 ? '+' : '') + Math.round(rel) + '°';
+    ctx.font = 'bold 10px "Segoe UI", sans-serif';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    const tw = ctx.measureText(txt).width;
+    const lx = pt.x - R - 5, ly = pt.y;
+    ctx.fillStyle = 'rgba(10,15,22,.7)';
+    ctx.fillRect(lx - tw - 4, ly - 7, tw + 7, 14);
+    ctx.fillStyle = rel > 0.5 ? '#f5c451' : rel < -0.5 ? '#4db6ff' : '#8fa3b8';
+    ctx.fillText(txt, lx, ly + 0.5);
+  }
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+}
+
+function drawHandles(pts, fig) {
+  // ---- Grab handles: knob on a lever arm above each joint ----
+  const handles = handlePositions(pts, fig);
+  for (let i = 0; i < JOINTS.length; i++) {
+    const h = handles[i], pt = pts[i];
+    const engaged = selected === i;
+    const grabbed = dragging !== null && dragging.fig === fig && dragging.i === i;
+    ctx.strokeStyle = engaged ? 'rgba(53,208,127,.55)' : 'rgba(77,182,255,.35)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(pt.x, pt.y); ctx.lineTo(h.x, h.y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.arc(h.x, h.y, 8, 0, Math.PI * 2);
+    ctx.fillStyle = engaged ? '#35d07f' : grabbed ? '#4db6ff' : 'rgba(77,182,255,.25)';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = engaged ? '#35d07f' : '#4db6ff';
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(h.x, h.y, 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#e7eef6';
+    ctx.fill();
+
+    // Name + degree readout to the right of the knob.
+    const rel = angles[JOINTS[i].key] || 0;
+    const txt = JOINTS[i].label + ' ' + (rel > 0 ? '+' : '') + Math.round(rel) + '°';
+    ctx.font = 'bold 10px "Segoe UI", sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    const tw = ctx.measureText(txt).width;
+    const lx = h.x + 12, ly = h.y;
+    ctx.fillStyle = 'rgba(10,15,22,.7)';
+    ctx.fillRect(lx - 3, ly - 7, tw + 7, 14);
+    ctx.fillStyle = engaged ? '#35d07f' : rel > 0.5 ? '#f5c451' : rel < -0.5 ? '#4db6ff' : '#8fa3b8';
+    ctx.fillText(txt, lx, ly + 0.5);
+  }
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+}
+
+function finishDraw(pts, segCOMs, arm, com) {
+  const heelX = ANKLE.x - BOS.back;
+  const toeX = ANKLE.x + BOS.front;
+
+  // Live height: dashed grey line at the skull crown.
+  const nb = pts[5], htp = pts[6];
+  const uvh = unit(nb.x, nb.y, htp.x, htp.y);
+  const headY = nb.y + uvh.y * 60; // crown = neck base + 27 (head center) + 12 + 21 (skull radius)
+  ctx.strokeStyle = 'rgba(160,175,190,.7)';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([8, 6]);
+  ctx.beginPath(); ctx.moveTo(heelX - 65, headY); ctx.lineTo(toeX + 115, headY); ctx.stroke();
+  ctx.setLineDash([]);
+  const hCm = (GROUND_Y - headY) / PX_PER_CM;
+  const totalIn = hCm / 2.54;
+  const ft = Math.floor(totalIn / 12), inch = totalIn - ft * 12;
+  const hLabel = hCm.toFixed(1) + ' cm (' + ft + '\u2032' + inch.toFixed(1) + '\u2033)';
+  ctx.font = 'bold 11px "Segoe UI", sans-serif';
+  ctx.fillStyle = '#a8b8c8';
+  ctx.textAlign = 'left';
+  ctx.fillText(hLabel, toeX + 121, headY + 4);
+  document.getElementById('stature').textContent = hLabel;
+
+  const balanced = drawCOM(com, heelX, toeX);
+
+  // ---- Seated twin (same joint angles over a sitting base pose) ----
+  const seated = computeChain(SEAT_ANKLE, SEAT_OFFSETS);
+  const sHip = seated.pts[2];
+  const sBaseL = sHip.x - 35, sBaseR = SEAT_ANKLE.x + BOS.front;
+  drawStool(sHip);
+  drawFigureBody(seated.pts, seated.arm, SEAT_ANKLE);
+  if (fascia) drawFascia(seated.pts);
+  drawDials(seated.pts, SEAT_OFFSETS);
+  drawHandles(seated.pts, 'seat');
+  drawCOM(seated.com, sBaseL, sBaseR);
+
+  // Captions.
+  ctx.font = 'bold 13px "Segoe UI", sans-serif';
+  ctx.fillStyle = '#8fa3b8';
+  ctx.textAlign = 'center';
+  ctx.fillText('STANDING', ANKLE.x + 30, GROUND_Y + 22);
+  ctx.fillText('SEATED', sHip.x + 60, GROUND_Y + 22);
+  ctx.textAlign = 'left';
+
+  updateReadouts(com, balanced, heelX, toeX);
+}
+
+function updateReadouts(com, balanced, heelX, toeX) {
+  const offsetCm = (com.x - ANKLE.x) / PX_PER_CM;
+  const heightCm = (GROUND_Y - com.y) / PX_PER_CM;
+  document.getElementById('offset').textContent =
+    (offsetCm >= 0 ? '+' : '') + offsetCm.toFixed(1) + ' cm ' + (offsetCm >= 0 ? '(fwd)' : '(back)');
+  document.getElementById('height').textContent = heightCm.toFixed(1) + ' cm';
+
+  const pill = document.getElementById('balance');
+  pill.textContent = balanced ? 'Balanced' : 'Off balance';
+  pill.className = 'pill ' + (balanced ? 'good' : 'bad');
+
+  const plumb = document.getElementById('plumb');
+  if (com.x < heelX) plumb.textContent = 'behind heel';
+  else if (com.x > toeX) plumb.textContent = 'past toes';
+  else {
+    const center = (heelX + toeX) / 2;
+    const rel = (com.x - center) / PX_PER_CM;
+    plumb.textContent = Math.abs(rel) < 1 ? 'centered'
+      : Math.abs(rel).toFixed(1) + ' cm ' + (rel > 0 ? 'toward toes' : 'toward heel');
+  }
+}
+
+// ---- Auto-balance mode ----
+// When on, all joints except the one being manipulated counter-rotate to
+// bring the COM back over its neutral standing position (ankle/hip strategy).
+let autoBalance = false;
+let heldJoint = null;   // joint the user is controlling; solver leaves it alone
+let rafId = null;
+const BAL_TARGET_X = ANKLE.x + 0.7;      // neutral-pose COM x
+const BAL_DEADBAND = 1.5;                // px (~0.5 cm)
+// Compensation weights: ankle strategy dominates, neck barely reacts.
+const BAL_W = { ankle: 1.0, knee: 0.55, hip: 0.85, abs: 0.5, shoulder: 0.3, neck: 0.15 };
+const BAL_SPEED = 1.4;                   // max deg per frame per joint
+
+function balanceStep() {
+  const com0 = computeChain().com.x;
+  const err = com0 - BAL_TARGET_X;
+  if (Math.abs(err) < BAL_DEADBAND) return false;
+
+  // Numeric Jacobian: d(COMx)/d(angle) for each free joint.
+  const grads = {};
+  let denom = 0;
+  for (const j of JOINTS) {
+    if (j.key === heldJoint) continue;
+    const a0 = angles[j.key];
+    angles[j.key] = a0 + 0.5;
+    const g = (computeChain().com.x - com0) / 0.5;
+    angles[j.key] = a0;
+    grads[j.key] = g;
+    denom += BAL_W[j.key] * g * g;
+  }
+  if (denom < 1e-6) return false;
+
+  let moved = false;
+  for (const k in grads) {
+    let d = -(err / denom) * BAL_W[k] * grads[k];
+    d = Math.max(-BAL_SPEED, Math.min(BAL_SPEED, d));
+    const na = Math.max(-40, Math.min(40, angles[k] + d));
+    if (Math.abs(na - angles[k]) > 1e-4) { angles[k] = na; moved = true; }
+  }
+  return moved;
+}
+
+function syncSliders() {
+  for (const j of JOINTS) {
+    document.getElementById('s_' + j.key).value = Math.round(angles[j.key]);
+    document.getElementById('v_' + j.key).textContent = Math.round(angles[j.key]) + '°';
+  }
+}
+
+function balanceLoop() {
+  rafId = null;
+  if (!autoBalance) return;
+  const moved = balanceStep();
+  syncSliders();
+  draw();
+  if (moved) rafId = requestAnimationFrame(balanceLoop);
+}
+
+function kickBalance() {
+  if (mode === 'pose' && autoBalance && rafId === null) rafId = requestAnimationFrame(balanceLoop);
+}
+
+// ---- Fascial continuity mode ----
+// Yellow front/back fascial lines with fixed length: when one joint moves,
+// the free joints counter-rotate so both line lengths stay ~constant.
+let fascia = false;
+let fasciaRef = null;   // {front, back} reference lengths captured at enable
+let fasciaRafId = null;
+const FASCIA_SPEED = 2;   // max deg per frame per joint
+const FASCIA_TOL = 0.8;   // px slack before the solver reacts
+// Offsets from each chain point (ankle..headTop) out to the body surface.
+const FASCIA_FRONT_R = [11, 16, 20, 26, 22, 11, 22];
+const FASCIA_BACK_R  = [11, 15, 28, 24, 26, 12, 15];
+
+function fasciaLines(pts) {
+  const front = [], back = [];
+  for (let i = 0; i < pts.length; i++) {
+    // Local "up" = average of adjacent segment directions.
+    let ux = 0, uy = 0;
+    if (i > 0) { const u = unit(pts[i - 1].x, pts[i - 1].y, pts[i].x, pts[i].y); ux += u.x; uy += u.y; }
+    if (i < pts.length - 1) { const u = unit(pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y); ux += u.x; uy += u.y; }
+    const L = Math.hypot(ux, uy) || 1; ux /= L; uy /= L;
+    const nx = -uy, ny = ux; // forward normal
+    front.push({ x: pts[i].x + nx * FASCIA_FRONT_R[i], y: pts[i].y + ny * FASCIA_FRONT_R[i] });
+    back.push({ x: pts[i].x - nx * FASCIA_BACK_R[i], y: pts[i].y - ny * FASCIA_BACK_R[i] });
+  }
+  return { front, back };
+}
+
+function polyLen(line) {
+  let s = 0;
+  for (let i = 1; i < line.length; i++) s += Math.hypot(line[i].x - line[i - 1].x, line[i].y - line[i - 1].y);
+  return s;
+}
+
+function fasciaLengths() {
+  const { front, back } = fasciaLines(computeChain().pts);
+  return { front: polyLen(front), back: polyLen(back) };
+}
+
+function drawFascia(pts) {
+  const { front, back } = fasciaLines(pts);
+  ctx.save();
+  ctx.strokeStyle = '#ffe14d';
+  ctx.lineWidth = 3;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  for (const line of [front, back]) {
+    ctx.beginPath();
+    ctx.moveTo(line[0].x, line[0].y);
+    for (let i = 1; i < line.length; i++) ctx.lineTo(line[i].x, line[i].y);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function fasciaStep() {
+  const cur = fasciaLengths();
+  const rF = cur.front - fasciaRef.front;
+  const rB = cur.back - fasciaRef.back;
+  if (Math.abs(rF) < FASCIA_TOL && Math.abs(rB) < FASCIA_TOL) return false;
+
+  // Numeric Jacobian of both line lengths for each free joint.
+  const keys = JOINTS.map(j => j.key).filter(k => k !== heldJoint);
+  const JF = {}, JB = {};
+  for (const k of keys) {
+    const a0 = angles[k];
+    angles[k] = a0 + 0.5;
+    const l = fasciaLengths();
+    angles[k] = a0;
+    JF[k] = (l.front - cur.front) / 0.5;
+    JB[k] = (l.back - cur.back) / 0.5;
+  }
+
+  // Minimum-norm Gauss-Newton step: d = -J^T (J J^T)^-1 r, with J J^T 2x2.
+  let a = 0, b = 0, c = 0;
+  for (const k of keys) { a += JF[k] * JF[k]; b += JF[k] * JB[k]; c += JB[k] * JB[k]; }
+  const det = a * c - b * b;
+  if (Math.abs(det) < 1e-6) return false;
+  const lF = (c * rF - b * rB) / det;
+  const lB = (-b * rF + a * rB) / det;
+
+  let moved = false;
+  for (const k of keys) {
+    let d = -(JF[k] * lF + JB[k] * lB);
+    d = Math.max(-FASCIA_SPEED, Math.min(FASCIA_SPEED, d));
+    const na = Math.max(-40, Math.min(40, angles[k] + d));
+    if (Math.abs(na - angles[k]) > 1e-4) { angles[k] = na; moved = true; }
+  }
+  return moved;
+}
+
+function fasciaLoop() {
+  fasciaRafId = null;
+  if (!fascia || !fasciaRef) return;
+  const moved = fasciaStep();
+  syncSliders();
+  draw();
+  if (moved) fasciaRafId = requestAnimationFrame(fasciaLoop);
+}
+
+function kickFascia() {
+  if (mode === 'pose' && fascia && fasciaRafId === null) fasciaRafId = requestAnimationFrame(fasciaLoop);
+}
+
+// Pose set wholesale (preset/slot/height): re-baseline instead of fighting it.
+function rebaseFascia() {
+  if (fascia) fasciaRef = fasciaLengths();
+}
+
+// ==== GAIT ENGINE: walking & running on a treadmill ====
+// Phase 0..1 = one full stride of the NEAR (viewer-side) leg, heel strike at 0.
+// The far leg runs the same curves offset by half a cycle.
+let mode = 'pose';                 // 'pose' | 'walk' | 'run'
+let gaitPhase = 0, gaitPaused = false, gaitRaf = null, gaitLastT = 0, gaitDt = 0;
+let slowMo = 1;                    // playback rate: 1 = full speed, 0 = frozen
+const GAIT_X = 300;
+const THIGH_L = 130, SHANK_L = 135;
+let cadence = { walk: 112, run: 172 };
+
+// Joint keyframes: [% of gait cycle, degrees]. Sagittal convention: forward/flexion +.
+// Foot = absolute pitch from horizontal, toes-up +. GRF in body weights vs % of stance.
+const GAITS = {
+  walk: {
+    label: 'WALKING', stance: 0.62, lean: 3, sway: 1.5,
+    armSwing: 24, backSwing: 1.25, elbowBase: 28, elbowSwing: 14, elbowOpen: 8,
+    cadMin: 80, cadMax: 140,
+    flight: null, flightH: 0,
+    hip:  [[0, 30], [0.1, 24], [0.3, 5], [0.5, -10], [0.62, -8], [0.75, 15], [0.87, 32], [1, 30]],
+    knee: [[0, 6], [0.12, 18], [0.3, 8], [0.5, 16], [0.62, 40], [0.75, 64], [0.85, 30], [0.95, 8], [1, 6]],
+    foot: [[0, 18], [0.06, 4], [0.12, 0], [0.45, -2], [0.55, -12], [0.65, -30], [0.75, -14], [0.85, 4], [0.93, 14], [1, 18]],
+    grf:  [[0, 0], [0.13, 1.1], [0.3, 1.15], [0.5, 0.8], [0.72, 1.12], [0.92, 0.35], [1, 0]],
+  },
+  run: {
+    label: 'RUNNING', stance: 0.36, lean: 8, sway: 2.5,
+    armSwing: 42, backSwing: 1.6, elbowBase: 85, elbowSwing: 18, elbowOpen: 26,
+    cadMin: 140, cadMax: 210,
+    flight: [[0.36, 0.5], [0.86, 1.0]], flightH: 15,
+    hip:  [[0, 34], [0.15, 10], [0.3, -12], [0.42, -18], [0.6, 6], [0.78, 38], [0.9, 42], [1, 34]],
+    knee: [[0, 18], [0.1, 42], [0.25, 24], [0.4, 38], [0.55, 88], [0.68, 104], [0.85, 52], [1, 18]],
+    foot: [[0, 8], [0.05, -2], [0.2, -5], [0.36, -32], [0.5, -18], [0.7, 2], [0.9, 10], [1, 8]],
+    grf:  [[0, 0], [0.15, 1.6], [0.45, 2.5], [0.8, 1.1], [1, 0]],
+  },
+};
+
+const MODE_HINTS = {
+  pose: 'Off: joints move independently. On: rotate one joint and the rest of the body automatically counter-rotates (ankle/hip strategy) to keep the center of mass over the feet.',
+  walk: 'Stylized walking cycle. Watch the COM plumb — it rarely sits square over the stance foot because walking is controlled falling. The blue trail is the COM path.',
+  run: 'Stylized running cycle with true flight phases — both feet leave the belt and the Support pill reads FLIGHT. Peak ground reaction hits ~2.5× body weight near midstance.',
+  qwop: 'Classic QWOP: Q/W scissor the thighs, O/P the calves — full ragdoll physics, 100 m to glory. The runner holds perfectly still until your first input. R restarts.',
+};
+
+// Cubic-Hermite keyframe sampler (centered-difference tangents), wraps around the
+// cycle. C1-continuous velocity — no ease-in-out "pulse" at each keyframe.
+function sampleKF(pairs, t) {
+  t = ((t % 1) + 1) % 1;
+  const n = pairs.length;
+  let i = 1;
+  while (i < n - 1 && t > pairs[i][0]) i++;
+  const at = k => {   // wrapped neighbor (tables start/end with equal values)
+    if (k < 0) return [pairs[k + n - 1][0] - 1, pairs[k + n - 1][1]];
+    if (k >= n) return [pairs[k - n + 1][0] + 1, pairs[k - n + 1][1]];
+    return pairs[k];
+  };
+  const p0 = at(i - 2), p1 = pairs[i - 1], p2 = pairs[i], p3 = at(i + 1);
+  const h = (p2[0] - p1[0]) || 1e-6;
+  const s = (t - p1[0]) / h;
+  const m1 = (p2[1] - p0[1]) / (p2[0] - p0[0]) * h;
+  const m2 = (p3[1] - p1[1]) / (p3[0] - p1[0]) * h;
+  const s2 = s * s, s3 = s2 * s;
+  return (2 * s3 - 3 * s2 + 1) * p1[1] + (s3 - 2 * s2 + s) * m1
+       + (-2 * s3 + 3 * s2) * p2[1] + (s3 - s2) * m2;
+}
+
+// Joint ROM grows with cadence — faster gait swings bigger, like real locomotion.
+function gaitAmp(g) {
+  return 0.85 + 0.3 * (cadence[mode] - g.cadMin) / (g.cadMax - g.cadMin);
+}
+
+function legAngles(g, ph) {
+  const a = gaitAmp(g);
+  // Knee/ankle sliders offset BOTH legs' curves: crouch gait and toe/heel-walking.
+  return { hip: sampleKF(g.hip, ph) * a,
+           knee: sampleKF(g.knee, ph) * a + (angles.knee || 0),
+           foot: sampleKF(g.foot, ph) + (angles.ankle || 0),
+           ph };
+}
+
+// Vertical drop from pelvis to the foot's lowest sole corner (heel or toe).
+function legReach(la) {
+  const hs = heightScale;
+  const th = la.foot * DEG;
+  const corner = (x, y) => -x * Math.sin(th) + y * Math.cos(th);
+  return THIGH_L * hs * Math.cos(la.hip * DEG)
+       + SHANK_L * hs * Math.cos((la.hip - la.knee) * DEG)
+       + Math.max(corner(-16, 22), corner(42, 22));
+}
+
+function rawReach(g, ph) {
+  return Math.max(legReach(legAngles(g, ph)), legReach(legAngles(g, (ph + 0.5) % 1)));
+}
+
+// Pelvis height: clamp the lowest stance foot to the belt (softened toward the
+// cycle mean), with a ballistic parabola bridged across running flight windows.
+let gaitMeanReach = 0, gaitBounceCm = 0, gaitPeakGRF = 1;
+let gaitStrideX0 = 0, gaitStrideD = 0, gaitStridePx = 0;
+function computeGaitStats(g) {
+  if (!g) return;   // qwop and pose have no keyframe tables
+  let s = 0;
+  for (let i = 0; i < 100; i++) s += rawReach(g, i / 100);
+  gaitMeanReach = s / 100;
+  let lo = Infinity, hi = -Infinity;
+  for (let i = 0; i < 120; i++) {
+    const y = pelvisYAt(g, i / 120);
+    lo = Math.min(lo, y); hi = Math.max(hi, y);
+  }
+  gaitBounceCm = (hi - lo) / PX_PER_CM;
+  gaitPeakGRF = Math.max(...g.grf.map(p => p[1]));
+  // Stride from actual curve geometry: ankle x-travel while the foot is planted.
+  const ax = ph => {
+    const la = legAngles(g, ph);
+    return Math.sin(la.hip * DEG) * THIGH_L * heightScale
+         + Math.sin((la.hip - la.knee) * DEG) * SHANK_L * heightScale;
+  };
+  gaitStrideX0 = ax(0);
+  gaitStrideD = gaitStrideX0 - ax(g.stance);
+  gaitStridePx = gaitStrideD / g.stance;
+}
+
+function pelvisYAt(g, ph) {
+  const clamp = p => GROUND_Y - (gaitMeanReach + (rawReach(g, p) - gaitMeanReach) * 0.65);
+  if (g.flight) {
+    for (const [a, b] of g.flight) {
+      if (ph >= a && ph < b) {
+        const s = (ph - a) / (b - a);
+        return clamp(a) * (1 - s) + clamp(b) * s - g.flightH * 4 * s * (1 - s);
+      }
+    }
+  }
+  return clamp(ph);
+}
+
+// 2-link leg IK: hip/knee angles reaching ankle target T, knee bending forward.
+function legIK(pelvis, T) {
+  const L1 = THIGH_L * heightScale, L2 = SHANK_L * heightScale;
+  let dx = T.x - pelvis.x, dy = T.y - pelvis.y;
+  let d = Math.hypot(dx, dy);
+  const dMax = (L1 + L2) * 0.9995;
+  if (d > dMax) { dx *= dMax / d; dy *= dMax / d; d = dMax; }
+  const a = Math.atan2(dx, dy);   // forward+ from straight down
+  const cosK = (L1 * L1 + L2 * L2 - d * d) / (2 * L1 * L2);
+  const inner = Math.acos(Math.max(-1, Math.min(1, cosK)));
+  const alpha = Math.asin(Math.max(-1, Math.min(1, L2 * Math.sin(inner) / d)));
+  return { hip: (a + alpha) / DEG, knee: (Math.PI - inner) / DEG };
+}
+
+function computeGait(g, ph) {
+  const hs = heightScale;
+  const pelvis = { x: GAIT_X + 4 * Math.sin(4 * Math.PI * ph), y: pelvisYAt(g, ph) };
+
+  function legPts(la) {
+    const stance = la.ph < g.stance;
+    if (stance) {
+      // Pin the stance ankle to the belt: exact linear x-travel = zero slip.
+      const ay = pelvis.y + Math.cos(la.hip * DEG) * THIGH_L * hs
+               + Math.cos((la.hip - la.knee) * DEG) * SHANK_L * hs;
+      const T = { x: GAIT_X + gaitStrideX0 - gaitStrideD * (la.ph / g.stance), y: ay };
+      const ik = legIK(pelvis, T);
+      la = { ...la, hip: ik.hip, knee: ik.knee };
+    }
+    const a1 = la.hip * DEG, a2 = (la.hip - la.knee) * DEG;
+    const knee = { x: pelvis.x + Math.sin(a1) * THIGH_L * hs, y: pelvis.y + Math.cos(a1) * THIGH_L * hs };
+    const ankle = { x: knee.x + Math.sin(a2) * SHANK_L * hs, y: knee.y + Math.cos(a2) * SHANK_L * hs };
+    return { ...la, hipA: la.hip, kneeA: la.knee, knee, ankle, stance,
+             grf: stance ? Math.max(0, sampleKF(g.grf, la.ph / g.stance)) : 0 };
+  }
+  const near = legPts(legAngles(g, ph));
+  const far = legPts(legAngles(g, (ph + 0.5) % 1));
+
+  // Trunk chain up from the pelvis; posture sliders (hip..neck) layer onto the lean.
+  const lean = g.lean + g.sway * Math.sin(4 * Math.PI * ph);
+  const tKeys = ['hip', 'abs', 'shoulder', 'neck'];
+  const tp = [pelvis];
+  const segCOMs = [];
+  let cum = lean, p = pelvis;
+  for (let i = 0; i < 4; i++) {
+    // Neck counter-rotates the sway oscillation (vestibular head stabilization).
+    cum += (angles[tKeys[i]] || 0) - (i === 3 ? lean - g.lean : 0);
+    const seg = SEGMENTS[i + 2], L = seg.len * hs;
+    const dir = { x: Math.sin(cum * DEG), y: -Math.cos(cum * DEG) };
+    const next = { x: p.x + dir.x * L, y: p.y + dir.y * L };
+    distribute(p, next, seg.mass, seg.com, segCOMs);
+    tp.push(next); p = next;
+  }
+  const absPt = tp[1], shoulderPt = tp[2], neckBase = tp[3], headTop = tp[4];
+
+  // Arms swing opposite their same-side leg, lagging it slightly; forward swing
+  // flexes the elbow more.
+  const swing = Math.cos(2 * Math.PI * (ph - 0.045)) * g.armSwing * gaitAmp(g);
+  function armPts(sw) {
+    const uL = 100 * hs, fL = 92 * hs;
+    // Backswing drives harder than the front swing — the elbow punches back
+    // past the torso and the forearm opens up ("hip pocket" position).
+    const drive = sw < 0 ? sw * (g.backSwing || 1) : sw;
+    const a1 = (lean + drive) * DEG;
+    const elbow = { x: shoulderPt.x + Math.sin(a1) * uL, y: shoulderPt.y + Math.cos(a1) * uL };
+    const flex = g.elbowBase + g.elbowSwing * Math.max(0, sw) / (g.armSwing || 1)
+               - (g.elbowOpen || 0) * Math.max(0, -sw) / (g.armSwing || 1);
+    const a2 = a1 + flex * DEG;
+    const wrist = { x: elbow.x + Math.sin(a2) * fL, y: elbow.y + Math.cos(a2) * fL };
+    return { elbow, wrist };
+  }
+  const armNear = armPts(swing), armFar = armPts(-swing);
+
+  for (const lg of [near, far]) {
+    distribute(pelvis, lg.knee, 10, 0.43, segCOMs);
+    distribute(lg.knee, lg.ankle, 4.5, 0.43, segCOMs);
+    segCOMs.push({ x: lg.ankle.x + 8, y: lg.ankle.y + 14, mass: 1.5 });
+  }
+  for (const arm of [armNear, armFar]) {
+    distribute(shoulderPt, arm.elbow, 3, 0.5, segCOMs);
+    distribute(arm.elbow, arm.wrist, 2, 0.5, segCOMs);
+  }
+
+  let mx = 0, my = 0, m = 0;
+  for (const s of segCOMs) { mx += s.x * s.mass; my += s.y * s.mass; m += s.mass; }
+  const com = { x: mx / m, y: my / m };
+
+  return { pelvis, near, far, absPt, shoulderPt, neckBase, headTop, armNear, armFar, com, lean };
+}
+
+// ---- Gait figure rendering ----
+function drawGaitShoe(lg, farSide) {
+  ctx.save();
+  ctx.translate(lg.ankle.x, lg.ankle.y);
+  ctx.rotate(-lg.foot * DEG);
+  ctx.fillStyle = farSide ? '#232c39' : '#3a4657';
+  ctx.beginPath();
+  ctx.moveTo(-13, 2);
+  ctx.lineTo(-17, 14);
+  ctx.quadraticCurveTo(-18, 20, -12, 21);
+  ctx.lineTo(34, 21);
+  ctx.quadraticCurveTo(44, 21, 42, 13);
+  ctx.quadraticCurveTo(38, 7, 22, 5);
+  ctx.quadraticCurveTo(12, 4, 8, -1);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = farSide ? '#8fa0b4' : '#e7eef6';
+  ctx.fillRect(-16, 20, 58, 5);
+  ctx.restore();
+}
+
+function drawGaitLeg(lg, pelvis, farSide) {
+  const PANTS = femme ? '#5b4a78' : '#4a6da7';
+  ctx.fillStyle = farSide ? darken(PANTS, 0.4) : PANTS;
+  limb(pelvis, farSide ? 20 : 23, lg.knee, farSide ? 13 : 15);
+  blob(lg.knee, farSide ? 12 : 14);
+  limb(lg.knee, farSide ? 12 : 14, lg.ankle, farSide ? 8 : 10);
+  drawGaitShoe(lg, farSide);
+}
+
+function drawGaitArm(arm, shoulderPt, farSide) {
+  const top = { x: shoulderPt.x, y: shoulderPt.y + 2 };
+  ctx.fillStyle = farSide ? darken(SKIN_DK, 0.3) : SKIN_DK;
+  blob(top, farSide ? 10 : 12);
+  limb(top, farSide ? 9 : 10.5, arm.elbow, farSide ? 6.5 : 7.5);
+  blob(arm.elbow, farSide ? 6.5 : 7.5);
+  limb(arm.elbow, farSide ? 6.5 : 7.5, arm.wrist, farSide ? 4.5 : 5.5);
+  blob(arm.wrist, farSide ? 7 : 8.5);   // fist
+}
+
+function drawGaitTorso(S) {
+  const SHIRT = shirtColors[femme ? 'girl' : 'guy'];
+  const SHIRT_DK = darken(SHIRT, 0.22);
+  const PANTS = femme ? '#5b4a78' : '#4a6da7';
+  const { pelvis, absPt, shoulderPt, neckBase } = S;
+  ctx.fillStyle = PANTS;
+  blob(pelvis, femme ? 28 : 26);
+  const waist = { x: pelvis.x + (absPt.x - pelvis.x) * 0.45, y: pelvis.y + (absPt.y - pelvis.y) * 0.45 };
+  limb(pelvis, 26, waist, 23);
+  const wu = unit(pelvis.x, pelvis.y, absPt.x, absPt.y);
+  // Neck first so the shirt collar overlaps its base.
+  ctx.fillStyle = SKIN;
+  limb(shoulderPt, 11, neckBase, 10);
+  ctx.fillStyle = SHIRT;
+  limb({ x: waist.x + wu.x * 10, y: waist.y + wu.y * 10 }, 22, absPt, 23);
+  limb(absPt, 23, shoulderPt, 27);
+  // Shoulder mass rides up beside the neck base so it doesn't sit low on the torso.
+  const tu = unit(absPt.x, absPt.y, shoulderPt.x, shoulderPt.y);
+  blob({ x: shoulderPt.x + tu.x * 6, y: shoulderPt.y + tu.y * 6 }, femme ? 22 : 24);
+  if (femme) blob({ x: absPt.x + (shoulderPt.x - absPt.x) * 0.6 + 13,
+                    y: absPt.y + (shoulderPt.y - absPt.y) * 0.6 }, 11);
+  blob({ x: absPt.x + 9, y: absPt.y + 5 }, femme ? 10 : 12);   // belly
+  ctx.fillStyle = SHIRT_DK;
+  limb({ x: waist.x + wu.x * 10, y: waist.y + wu.y * 10 }, 22,
+       { x: waist.x + wu.x * 15, y: waist.y + wu.y * 15 }, 22);
+}
+
+// ---- Gait scene furniture ----
+let beltOffset = 0;
+function drawTreadmill(speedMps) {
+  const L = GAIT_X - 185, W = 370;
+  ctx.fillStyle = '#101822';
+  ctx.fillRect(L, GROUND_Y, W, 16);
+  ctx.fillStyle = '#212c3a';
+  ctx.fillRect(L, GROUND_Y, W, 4);
+  ctx.fillStyle = '#33465c';
+  ctx.beginPath(); ctx.arc(L + 5, GROUND_Y + 8, 8, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(L + W - 5, GROUND_Y + 8, 8, 0, Math.PI * 2); ctx.fill();
+  beltOffset = (beltOffset + speedMps * 100 * PX_PER_CM * gaitDt) % 34;
+  ctx.strokeStyle = 'rgba(143,163,184,.45)';
+  ctx.lineWidth = 2;
+  for (let x = L + 14 + 34 - beltOffset; x < L + W - 8; x += 34) {
+    ctx.beginPath();
+    ctx.moveTo(x, GROUND_Y + 6);
+    ctx.lineTo(x - 6, GROUND_Y + 12);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = '#33465c';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, GROUND_Y); ctx.lineTo(L, GROUND_Y);
+  ctx.moveTo(L + W, GROUND_Y); ctx.lineTo(VIEW_W, GROUND_Y);
+  ctx.stroke();
+}
+
+function drawGRF(lg) {
+  const h = lg.grf * 55;
+  if (h < 4) return;
+  const x = lg.ankle.x + 10;
+  ctx.strokeStyle = 'rgba(255,143,93,.95)';
+  ctx.fillStyle = 'rgba(255,143,93,.95)';
+  ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(x, GROUND_Y - 2); ctx.lineTo(x, GROUND_Y - h); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x, GROUND_Y - h - 10);
+  ctx.lineTo(x - 5, GROUND_Y - h);
+  ctx.lineTo(x + 5, GROUND_Y - h);
+  ctx.closePath();
+  ctx.fill();
+  ctx.font = 'bold 10px "Segoe UI", sans-serif';
+  ctx.fillText(lg.grf.toFixed(1) + '\u00d7BW', x + 8, GROUND_Y - h);
+}
+
+function drawPhaseBar(g, ph) {
+  const x = 470, w = 290, h = 12;
+  ctx.font = 'bold 10px "Segoe UI", sans-serif';
+  ctx.textBaseline = 'middle';
+  const rows = [['NEAR', 0], ['FAR', 0.5]];
+  for (let i = 0; i < rows.length; i++) {
+    const yy = 18 + i * 17;
+    ctx.fillStyle = 'rgba(10,15,22,.55)';
+    ctx.fillRect(x, yy, w, h);
+    ctx.fillStyle = 'rgba(53,208,127,.5)';
+    const s0 = rows[i][1], s1 = s0 + g.stance;
+    if (s1 <= 1) {
+      ctx.fillRect(x + s0 * w, yy, g.stance * w, h);
+    } else {
+      ctx.fillRect(x + s0 * w, yy, (1 - s0) * w, h);
+      ctx.fillRect(x, yy, (s1 - 1) * w, h);
+    }
+    ctx.fillStyle = '#8fa3b8';
+    ctx.textAlign = 'right';
+    ctx.fillText(rows[i][0], x - 6, yy + h / 2);
+  }
+  ctx.strokeStyle = '#f5c451';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x + ph * w, 14);
+  ctx.lineTo(x + ph * w, 18 + 17 + h + 4);
+  ctx.stroke();
+  ctx.fillStyle = '#5b6b7d';
+  ctx.textAlign = 'left';
+  ctx.fillText('green = stance \u00b7 dark = swing', x, 18 + 17 + h + 12);
+  ctx.textBaseline = 'alphabetic';
+}
+
+function drawChart(x, y, w, h, title, pairs, cursorT, color, scale, actual) {
+  const SV = t => sampleKF(pairs, t) * (scale || 1);
+  ctx.fillStyle = 'rgba(10,15,22,.55)';
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = '#2c3a4c';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x, y, w, h);
+  let lo = Infinity, hi = -Infinity;
+  for (let i = 0; i <= 64; i++) {
+    const v = SV(i / 64);
+    lo = Math.min(lo, v); hi = Math.max(hi, v);
+  }
+  if (actual !== undefined && actual !== null) { lo = Math.min(lo, actual); hi = Math.max(hi, actual); }
+  const pad = (hi - lo) * 0.15 || 1;
+  lo -= pad; hi += pad;
+  const Y = v => y + h - (v - lo) / (hi - lo) * h;
+  if (lo < 0 && hi > 0) {
+    ctx.strokeStyle = 'rgba(143,163,184,.3)';
+    ctx.setLineDash([3, 4]);
+    ctx.beginPath(); ctx.moveTo(x, Y(0)); ctx.lineTo(x + w, Y(0)); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let i = 0; i <= 64; i++) {
+    const px = x + (i / 64) * w, py = Y(SV(i / 64));
+    i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+  ctx.font = 'bold 10px "Segoe UI", sans-serif';
+  ctx.fillStyle = '#8fa3b8';
+  ctx.textAlign = 'left';
+  ctx.fillText(title, x + 6, y + 12);
+  if (cursorT !== null) {
+    const cx = x + cursorT * w;
+    const v = (actual !== undefined && actual !== null) ? actual : SV(cursorT);
+    ctx.strokeStyle = 'rgba(245,196,81,.5)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(cx, y); ctx.lineTo(cx, y + h); ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(cx, Y(v), 3.5, 0, Math.PI * 2); ctx.fill();
+    ctx.textAlign = 'right';
+    ctx.fillText(v.toFixed(0), x + w - 6, y + 12);
+  }
+  ctx.textAlign = 'left';
+}
+
+const comTrace = [];
+const liveTrunk = new Array(96).fill(null);   // live-recorded trunk angle per phase bin
+
+function drawLiveChart(x, y, w, h, title, bins, cursorT, color) {
+  ctx.fillStyle = 'rgba(10,15,22,.55)';
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = '#2c3a4c';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x, y, w, h);
+  ctx.font = 'bold 10px "Segoe UI", sans-serif';
+  ctx.fillStyle = '#8fa3b8';
+  ctx.textAlign = 'left';
+  ctx.fillText(title, x + 6, y + 12);
+  const vals = bins.filter(v => v !== null);
+  if (!vals.length) return;
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  const pad = (hi - lo) * 0.15 || 2;
+  lo -= pad; hi += pad;
+  const Y = v => y + h - (v - lo) / (hi - lo) * h;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  let started = false;
+  for (let i = 0; i < bins.length; i++) {
+    if (bins[i] === null) { started = false; continue; }
+    const px = x + (i / (bins.length - 1)) * w, py = Y(bins[i]);
+    started ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+    started = true;
+  }
+  ctx.stroke();
+  const bi = Math.min(bins.length - 1, Math.floor(cursorT * bins.length));
+  if (bins[bi] !== null) {
+    const cx = x + cursorT * w;
+    ctx.strokeStyle = 'rgba(245,196,81,.5)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(cx, y); ctx.lineTo(cx, y + h); ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(cx, Y(bins[bi]), 3.5, 0, Math.PI * 2); ctx.fill();
+    ctx.textAlign = 'right';
+    ctx.fillText(bins[bi].toFixed(0), x + w - 6, y + 12);
+    ctx.textAlign = 'left';
+  }
+}
+
+function drawGait() {
+  const g = GAITS[mode];
+  const S = computeGait(g, gaitPhase);
+  ctx.clearRect(0, 0, VIEW_W, VIEW_H);
+
+  // Speed is emergent: pinned-foot stride geometry × cadence.
+  const stepLen = gaitStridePx / 2 / PX_PER_CM / 100;   // meters
+  const speed = cadence[mode] / 60 * stepLen;
+
+  // Base of support tracks the stance foot (used for plumb color only — band off in gait).
+  let baseL = Infinity, baseR = -Infinity;
+  for (const lg of [S.near, S.far]) {
+    if (lg.stance) {
+      baseL = Math.min(baseL, lg.ankle.x - 20);
+      baseR = Math.max(baseR, lg.ankle.x + 48);
+    }
+  }
+  const grounded = baseR > baseL;
+
+  drawTreadmill(speed);
+
+  // Shadow scales with load, fades in flight.
+  const load = S.near.grf + S.far.grf;
+  ctx.fillStyle = grounded ? 'rgba(0,0,0,.3)' : 'rgba(0,0,0,.16)';
+  ctx.beginPath();
+  ctx.ellipse(S.com.x, GROUND_Y + 8, 44 + 14 * Math.min(1.5, load), 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  drawGaitArm(S.armFar, S.shoulderPt, true);
+  drawGaitLeg(S.far, S.pelvis, true);
+  drawGaitTorso(S);
+  drawHead(S.neckBase, S.headTop);
+  drawGaitLeg(S.near, S.pelvis, false);
+  drawGaitArm(S.armNear, S.shoulderPt, false);
+  if (fascia) drawFascia([S.near.ankle, S.near.knee, S.pelvis, S.absPt, S.shoulderPt, S.neckBase, S.headTop]);
+
+  if (S.near.stance) drawGRF(S.near);
+  if (S.far.stance) drawGRF(S.far);
+
+  // COM trail: the figure is treadmill-fixed, so the trace closes into a loop.
+  comTrace.push({ x: S.com.x, y: S.com.y });
+  if (comTrace.length > 160) comTrace.shift();
+  ctx.lineWidth = 2;
+  for (let i = 1; i < comTrace.length; i++) {
+    ctx.strokeStyle = 'rgba(77,182,255,' + ((i / comTrace.length) * 0.6).toFixed(3) + ')';
+    ctx.beginPath();
+    ctx.moveTo(comTrace[i - 1].x, comTrace[i - 1].y);
+    ctx.lineTo(comTrace[i].x, comTrace[i].y);
+    ctx.stroke();
+  }
+  drawCOM(S.com, S.com.x - 1, S.com.x + 1);   // always blue in gait
+
+  drawPhaseBar(g, gaitPhase);
+  // Trunk chart records the ACTUAL chest angle each frame — slider changes
+  // rewrite the trace bin-by-bin as the cursor sweeps the cycle.
+  liveTrunk[Math.min(95, Math.floor(gaitPhase * 96))] =
+    S.lean + (angles.hip || 0) + (angles.abs || 0);
+  const inStance = gaitPhase < g.stance ? gaitPhase / g.stance : null;
+  const amp = gaitAmp(g);
+  drawChart(470, 78, 290, 76, 'HIP FLEXION \u00b0', g.hip, gaitPhase, '#4db6ff', amp, S.near.hipA);
+  drawChart(470, 168, 290, 76, 'KNEE FLEXION \u00b0', g.knee, gaitPhase, '#f5c451', amp, S.near.kneeA);
+  drawChart(470, 258, 290, 76, 'FOOT PITCH \u00b0', g.foot, gaitPhase, '#35d07f', 1, S.near.foot);
+  drawLiveChart(470, 348, 290, 76, 'TRUNK LEAN \u00b0 (live + posture)', liveTrunk, gaitPhase, '#c58fff');
+  drawChart(470, 438, 290, 76, 'GRF \u00d7BW (near, % stance)', g.grf, inStance, '#ff8f5d', 1, inStance !== null ? S.near.grf : null);
+
+  ctx.font = 'bold 13px "Segoe UI", sans-serif';
+  ctx.fillStyle = '#8fa3b8';
+  ctx.textAlign = 'center';
+  ctx.fillText(g.label + '  \u00b7  ' + (speed * 2.237).toFixed(1) + ' mph', GAIT_X, GROUND_Y + 40);
+  ctx.textAlign = 'left';
+
+  updateGaitReadouts(S, stepLen, speed);
+}
+
+function updateGaitReadouts(S, stepLen, speed) {
+  document.getElementById('g_speed').textContent =
+    speed.toFixed(2) + ' m/s (' + (speed * 2.237).toFixed(1) + ' mph)';
+  document.getElementById('g_cadence').textContent = cadence[mode] + ' steps/min';
+  document.getElementById('g_stride').textContent = (2 * stepLen).toFixed(2) + ' m';
+  document.getElementById('g_bounce').textContent = gaitBounceCm.toFixed(1) + ' cm';
+  document.getElementById('g_grf').textContent = gaitPeakGRF.toFixed(1) + '\u00d7 body weight';
+  const el = document.getElementById('g_support');
+  const sup = S.near.stance && S.far.stance ? 'Double support'
+    : S.near.stance ? 'Stance \u2014 near leg'
+    : S.far.stance ? 'Stance \u2014 far leg' : 'FLIGHT';
+  el.textContent = sup;
+  el.className = 'pill ' + (S.near.stance || S.far.stance ? 'good' : 'bad');
+}
+
+// ==== QWOP MODE: faithful Bennett-Foddy-style ragdoll sprint ====
+// Impulse-based rigid-body physics, same architecture as the original's Box2D:
+// 7 bodies (torso+head, thighs, calves+feet, arms), revolute joints solved by
+// sequential impulses, torque-LIMITED velocity motors on hips (Q/W) and knees
+// (O/P), and ground contacts with friction. A blocked motor stalls; reaction
+// torque vaults the body over the planted foot — the real QWOP mechanic.
+const PX_M = PX_PER_CM * 100;               // pixels per meter
+const QW = {
+  grav: 3000,          // px/s^2 (physical: 9.81 m/s^2 * 321 px/m)
+  hipW: 4.2,           // rad/s hip motor speed while commanded
+  hipT: 9e6,           // max hip torque
+  kneeW: 5.5, kneeT: 7e6,
+  holdT: 2.2e6,        // idle joint-friction torque (motors brake to 0 rad/s)
+  hipLo: -1.35, hipHi: 0.5,     // thigh rel torso (forward = negative)
+  kneeLo: -0.03, kneeHi: 2.25,  // calf rel thigh (flexion = positive)
+  mu: 1.1,             // shoe grip
+  mercyK: 3, mercyD: 1.5,       // faint torso-upright assist (QWOP mercy: ~none)
+  lean: 0.08,          // starting forward lean (rad)
+  substeps: 4, iters: 10,
+};
+let qwopRaf = null, qwopLastT = 0, qwopBest = 0;
+let qs = null;                              // live ragdoll state
+const qwopKeys = { q: false, w: false, o: false, p: false };
+
+function qBody(m, I, x, y, a) {
+  return { im: 1 / m, iI: 1 / I, m, x, y, a, vx: 0, vy: 0, w: 0 };
+}
+function qWorld(b, lx, ly) {
+  const c = Math.cos(b.a), s = Math.sin(b.a);
+  return { x: b.x + lx * c - ly * s, y: b.y + lx * s + ly * c };
+}
+
+function resetQwop() {
+  const hs = heightScale;
+  const TH = 130 * hs, CA = 135 * hs, TO = 210 * hs, AR = 190 * hs;
+  const B = {
+    torso: qBody(46, 46 * TO * TO / 12, 0, 0, QW.lean),
+    thighN: qBody(11, 11 * TH * TH / 10, 0, 0, -0.16),
+    thighF: qBody(11, 11 * TH * TH / 10, 0, 0, 0.16),
+    calfN: qBody(7, 7 * CA * CA / 8, 0, 0, -0.10),
+    calfF: qBody(7, 7 * CA * CA / 8, 0, 0, 0.22),
+    armN: qBody(4.5, 4.5 * AR * AR / 12, 0, 0, -0.05),
+    armF: qBody(4.5, 4.5 * AR * AR / 12, 0, 0, 0.05),
+  };
+  // Place the chain so the soles land on the ground.
+  const soleN = 67.5 * hs + 21;
+  const hipY = GROUND_Y - soleN - Math.cos(B.calfN.a) * CA - Math.cos(B.thighN.a) * TH + 6;
+  const hip = { x: 0, y: hipY };
+  for (const [thigh, calf] of [[B.thighN, B.calfN], [B.thighF, B.calfF]]) {
+    thigh.x = hip.x + Math.sin(-thigh.a) * TH / 2;   // body-local +y is down; a>0 tips knee back
+    thigh.y = hip.y + Math.cos(thigh.a) * TH / 2;
+    const knee = qWorld(thigh, 0, TH / 2);
+    calf.x = knee.x + Math.sin(-calf.a) * CA / 2;
+    calf.y = knee.y + Math.cos(calf.a) * CA / 2;
+  }
+  B.torso.x = hip.x + Math.sin(B.torso.a) * TO / 2;
+  B.torso.y = hip.y - Math.cos(B.torso.a) * TO / 2;
+  const sho = qWorld(B.torso, 0, -TO / 2);
+  for (const arm of [B.armN, B.armF]) {
+    arm.x = sho.x + Math.sin(-arm.a) * AR / 2;
+    arm.y = sho.y + Math.cos(arm.a) * AR / 2;
+  }
+
+  // Revolute joints: [bodyA, localA, bodyB, localB, limits, motor spec].
+  const J = (a, ax, ay, b, bx, by, lo, hi, maxT) =>
+    ({ a, ax, ay, b, bx, by, lo, hi, maxT, motorW: 0, accum: 0 });
+  const joints = {
+    hipN: J(B.torso, 0, TO / 2, B.thighN, 0, -TH / 2, QW.hipLo, QW.hipHi, QW.hipT),
+    hipF: J(B.torso, 0, TO / 2, B.thighF, 0, -TH / 2, QW.hipLo, QW.hipHi, QW.hipT),
+    kneeN: J(B.thighN, 0, TH / 2, B.calfN, 0, -CA / 2, QW.kneeLo, QW.kneeHi, QW.kneeT),
+    kneeF: J(B.thighF, 0, TH / 2, B.calfF, 0, -CA / 2, QW.kneeLo, QW.kneeHi, QW.kneeT),
+    shoN: J(B.torso, 0, -TO / 2, B.armN, 0, -AR / 2, -2.6, 2.6, 3.5e5),
+    shoF: J(B.torso, 0, -TO / 2, B.armF, 0, -AR / 2, -2.6, 2.6, 3.5e5),
+  };
+  // Ground contact points: [body, local x, local y, radius, mu, fail].
+  const C = (b, lx, ly, r, mu, fail) => ({ b, lx, ly, r, mu, fail: !!fail });
+  const contacts = [
+    C(B.calfN, -12, CA / 2 + 16, 5, QW.mu), C(B.calfN, 38, CA / 2 + 16, 5, QW.mu),
+    C(B.calfF, -12, CA / 2 + 16, 5, QW.mu), C(B.calfF, 38, CA / 2 + 16, 5, QW.mu),
+    C(B.thighN, 0, TH / 2, 13, 0.8), C(B.thighF, 0, TH / 2, 13, 0.8),
+    C(B.torso, 0, TO / 2, 24, 0.6, true),          // butt
+    C(B.torso, 0, -TO / 2, 22, 0.6, true),         // shoulder
+    C(B.torso, 0, -TO / 2 - 28 * hs - 27, 21, 0.6, true),  // head
+    C(B.armN, 0, AR / 2, 7, 0.8), C(B.armF, 0, AR / 2, 7, 0.8),
+  ];
+
+  qs = {
+    B, joints, contacts,
+    list: Object.values(B),
+    TH, CA, TO, AR,
+    state: 'run', started: false, x0: 0, cam: 0, speed: 0, lastX: 0, t: 0, P: {},
+  };
+  // Settle the build onto the ground, then hold statue-still for the start.
+  for (let i = 0; i < 30; i++) qwopStep(1 / 120);
+  for (const b of qs.list) { b.vx = b.vy = b.w = 0; }
+  refreshQwopPts();
+  qs.x0 = qs.P.hip.x;
+  qs.lastX = qs.P.hip.x;
+  qs.cam = qs.P.hip.x - 300;
+  qwopKeys.q = qwopKeys.w = qwopKeys.o = qwopKeys.p = false;
+}
+
+// World-space skeleton points for rendering + scoring, derived from the bodies.
+function refreshQwopPts() {
+  const { torso, thighN, thighF, calfN, calfF, armN, armF } = qs.B;
+  const hs = heightScale, TH = qs.TH, CA = qs.CA, TO = qs.TO, AR = qs.AR;
+  qs.P = {
+    hip: qWorld(torso, 0, TO / 2),
+    abs: qWorld(torso, 0, TO / 2 - 95 * hs),
+    sho: qWorld(torso, 0, -TO / 2),
+    head: qWorld(torso, 0, -TO / 2 - 28 * hs - 27),
+    kneeN: qWorld(thighN, 0, TH / 2), kneeF: qWorld(thighF, 0, TH / 2),
+    ankN: qWorld(calfN, 0, CA / 2), ankF: qWorld(calfF, 0, CA / 2),
+    heelN: qWorld(calfN, -12, CA / 2 + 16), toeN: qWorld(calfN, 38, CA / 2 + 16),
+    heelF: qWorld(calfF, -12, CA / 2 + 16), toeF: qWorld(calfF, 38, CA / 2 + 16),
+    elbN: qWorld(armN, 3, 0), elbF: qWorld(armF, 3, 0),
+    handN: qWorld(armN, 0, AR / 2), handF: qWorld(armF, 0, AR / 2),
+  };
+}
+
+// One revolute joint: pin anchors together (2x2 block solve + Baumgarte bias).
+function solveJointPin(j, h) {
+  const a = j.a, b = j.b;
+  const pa = qWorld(a, j.ax, j.ay), pb = qWorld(b, j.bx, j.by);
+  const rax = pa.x - a.x, ray = pa.y - a.y;
+  const rbx = pb.x - b.x, rby = pb.y - b.y;
+  const cx = (b.vx - b.w * rby) - (a.vx - a.w * ray) + 0.2 / h * (pb.x - pa.x);
+  const cy = (b.vy + b.w * rbx) - (a.vy + a.w * rax) + 0.2 / h * (pb.y - pa.y);
+  const k11 = a.im + b.im + a.iI * ray * ray + b.iI * rby * rby;
+  const k12 = -a.iI * rax * ray - b.iI * rbx * rby;
+  const k22 = a.im + b.im + a.iI * rax * rax + b.iI * rbx * rbx;
+  const det = k11 * k22 - k12 * k12 || 1e-9;
+  const px = -(k22 * cx - k12 * cy) / det;
+  const py = -(k11 * cy - k12 * cx) / det;
+  a.vx -= px * a.im; a.vy -= py * a.im; a.w -= a.iI * (rax * py - ray * px);
+  b.vx += px * b.im; b.vy += py * b.im; b.w += b.iI * (rbx * py - rby * px);
+}
+
+// Torque-limited velocity motor (Box2D-style accumulated & clamped impulse).
+function solveMotor(j, h) {
+  const effI = 1 / (j.a.iI + j.b.iI);
+  let imp = -((j.b.w - j.a.w) - j.motorW) * effI;
+  const maxImp = j.maxT * h;
+  const acc = Math.max(-maxImp, Math.min(maxImp, j.accum + imp));
+  imp = acc - j.accum;
+  j.accum = acc;
+  j.a.w -= j.a.iI * imp;
+  j.b.w += j.b.iI * imp;
+}
+
+// Hard angle stops on the relative body angle.
+function solveLimit(j, h) {
+  const rel = j.b.a - j.a.a;
+  const effI = 1 / (j.a.iI + j.b.iI);
+  if (rel < j.lo) {
+    const cdot = (j.b.w - j.a.w) + 0.3 / h * (rel - j.lo);
+    if (cdot < 0) { const imp = -cdot * effI; j.a.w -= j.a.iI * imp; j.b.w += j.b.iI * imp; }
+  } else if (rel > j.hi) {
+    const cdot = (j.b.w - j.a.w) + 0.3 / h * (rel - j.hi);
+    if (cdot > 0) { const imp = -cdot * effI; j.a.w -= j.a.iI * imp; j.b.w += j.b.iI * imp; }
+  }
+}
+
+// Ground contact: normal impulse (no bounce) + friction clamped by the normal.
+function solveContact(c, h) {
+  const b = c.b;
+  const p = qWorld(b, c.lx, c.ly);
+  const pen = p.y - (GROUND_Y - c.r);
+  c.touch = pen > -2;
+  if (pen < 0) return;
+  const rx = p.x - b.x, ry = p.y - b.y;
+  const vn = b.vy + b.w * rx;
+  const kn = b.im + b.iI * rx * rx;
+  let jn = (vn + Math.max(0, pen - 0.5) * 0.25 / h) / kn;
+  if (jn < 0) return;
+  b.vy -= jn * b.im;
+  b.w -= b.iI * rx * jn;
+  const vt = b.vx - b.w * ry;
+  const kt = b.im + b.iI * ry * ry;
+  const maxF = c.mu * jn;
+  const jt = Math.max(-maxF, Math.min(maxF, -vt / kt));
+  b.vx += jt * b.im;
+  b.w -= b.iI * ry * jt;
+}
+
+function qwopStep(dt) {
+  const B = qs.B, J = qs.joints;
+  const n = QW.substeps, h = dt / n;
+  const fallen = qs.state === 'fallen';
+  // Key commands -> motor speeds (idle = brake to zero, i.e. joint friction).
+  const thigh = fallen ? 0 : (qwopKeys.q ? 1 : 0) - (qwopKeys.w ? 1 : 0);
+  const calf = fallen ? 0 : (qwopKeys.o ? 1 : 0) - (qwopKeys.p ? 1 : 0);
+  J.hipN.motorW = -thigh * QW.hipW;  J.hipN.maxT = thigh ? QW.hipT : QW.holdT;
+  J.hipF.motorW = thigh * QW.hipW;   J.hipF.maxT = thigh ? QW.hipT : QW.holdT;
+  J.kneeN.motorW = calf * QW.kneeW;  J.kneeN.maxT = calf ? QW.kneeT : QW.holdT;
+  J.kneeF.motorW = -calf * QW.kneeW; J.kneeF.maxT = calf ? QW.kneeT : QW.holdT;
+
+  const linD = fallen ? 2 : 0.15, angD = fallen ? 4 : 0.8;
+  for (let s = 0; s < n; s++) {
+    for (const b of qs.list) {
+      b.vy += QW.grav * h;
+      b.vx *= Math.max(0, 1 - linD * h);
+      b.vy *= Math.max(0, 1 - linD * h);
+      b.w *= Math.max(0, 1 - angD * h);
+    }
+    // Arms are lazier than legs.
+    B.armN.w *= Math.max(0, 1 - 2.5 * h);
+    B.armF.w *= Math.max(0, 1 - 2.5 * h);
+    // Faint upright mercy on the torso (the original gives you basically none).
+    if (!fallen) B.torso.w += ((QW.lean - B.torso.a) * QW.mercyK - B.torso.w * QW.mercyD) * h;
+    for (const j of Object.values(J)) j.accum = 0;
+    for (let it = 0; it < QW.iters; it++) {
+      for (const j of Object.values(J)) {
+        solveMotor(j, h);
+        solveLimit(j, h);
+        solveJointPin(j, h);
+      }
+      for (const c of qs.contacts) solveContact(c, h);
+    }
+    for (const b of qs.list) {
+      b.x += b.vx * h;
+      b.y += b.vy * h;
+      b.a += b.w * h;
+    }
+  }
+  refreshQwopPts();
+}
+
+function qwopFrame(dt) {
+  qwopStep(dt);
+  const P = qs.P;
+  // Sleep at standstill: hands off + slow = dead stop (no creep, no AFK wins).
+  if (qs.state === 'run' && !qwopKeys.q && !qwopKeys.w && !qwopKeys.o && !qwopKeys.p) {
+    let m = 0;
+    for (const b of qs.list) m = Math.max(m, Math.abs(b.vx), Math.abs(b.vy), Math.abs(b.w) * 120);
+    if (m < 7) for (const b of qs.list) { b.vx = b.vy = b.w = 0; }
+  }
+  const dist = (P.hip.x - qs.x0) / PX_M;
+  qs.speed += ((P.hip.x - qs.lastX) / dt / PX_M - qs.speed) * 0.08;
+  qs.lastX = P.hip.x;
+  if (qs.state === 'run') {
+    qs.t += dt;
+    if (dist > qwopBest) qwopBest = dist;
+    if (dist >= 100) qs.state = 'won';
+    else {
+      for (const c of qs.contacts) {
+        if (c.fail && c.touch) {
+          qs.state = 'fallen';
+          qs.fallDist = dist;   // score where you fell, not where the corpse slides
+          break;
+        }
+      }
+    }
+  }
+}
+
+function drawQwop() {
+  if (!qs) return;
+  const P = qs.P;
+  ctx.clearRect(0, 0, VIEW_W, VIEW_H);
+  qs.cam += (P.hip.x - 300 - qs.cam) * 0.12;
+  const cam = qs.cam;
+  ctx.save();
+  ctx.translate(-cam, 0);
+
+  // Track: ground, meter marks, start line, finish gantry.
+  ctx.fillStyle = '#0d1420';
+  ctx.fillRect(cam, GROUND_Y, VIEW_W, VIEW_H - GROUND_Y);
+  ctx.strokeStyle = '#33465c';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(cam, GROUND_Y); ctx.lineTo(cam + VIEW_W, GROUND_Y); ctx.stroke();
+  ctx.font = 'bold 11px "Segoe UI", sans-serif';
+  ctx.textAlign = 'center';
+  for (let m = Math.floor((cam - qs.x0) / PX_M); m <= Math.ceil((cam - qs.x0 + VIEW_W) / PX_M); m++) {
+    const x = qs.x0 + m * PX_M;
+    ctx.strokeStyle = 'rgba(143,163,184,.4)';
+    ctx.lineWidth = m % 5 ? 1 : 2;
+    ctx.beginPath(); ctx.moveTo(x, GROUND_Y + 2); ctx.lineTo(x, GROUND_Y + (m % 5 ? 8 : 13)); ctx.stroke();
+    if (m % 5 === 0) { ctx.fillStyle = '#5b6b7d'; ctx.fillText(m + ' m', x, GROUND_Y + 27); }
+  }
+  ctx.strokeStyle = 'rgba(231,238,246,.5)';
+  ctx.setLineDash([6, 5]);
+  ctx.beginPath(); ctx.moveTo(qs.x0, GROUND_Y - 110); ctx.lineTo(qs.x0, GROUND_Y); ctx.stroke();
+  ctx.setLineDash([]);
+  const fx = qs.x0 + 100 * PX_M;
+  if (fx - cam < VIEW_W + 80) {
+    ctx.fillStyle = '#c9a227';
+    ctx.fillRect(fx - 3, GROUND_Y - 150, 6, 150);
+    ctx.fillStyle = 'rgba(255,93,93,.85)';
+    ctx.fillRect(fx - 3, GROUND_Y - 150, 6, 18);
+    ctx.font = 'bold 13px "Segoe UI", sans-serif';
+    ctx.fillStyle = '#e7eef6';
+    ctx.fillText('FINISH', fx, GROUND_Y - 158);
+  }
+
+  // COM + shadow (mass-weighted over the rigid bodies).
+  let mx = 0, my = 0, mm = 0;
+  for (const b of qs.list) { mx += b.x * b.m; my += b.y * b.m; mm += b.m; }
+  const com = { x: mx / mm, y: my / mm };
+  ctx.fillStyle = 'rgba(0,0,0,.28)';
+  ctx.beginPath(); ctx.ellipse(com.x, GROUND_Y + 8, 46, 6, 0, 0, Math.PI * 2); ctx.fill();
+
+  // Figure — far limbs first, same layering as the gait view.
+  const pitch = (heel, toe) => -Math.atan2(toe.y - heel.y, toe.x - heel.x) / DEG;
+  const hu = unit(P.sho.x, P.sho.y, P.head.x, P.head.y);
+  const nb = { x: P.head.x - hu.x * 27, y: P.head.y - hu.y * 27 };
+  const hTop = { x: nb.x + hu.x * 60, y: nb.y + hu.y * 60 };
+  drawGaitArm({ elbow: P.elbF, wrist: P.handF }, P.sho, true);
+  drawGaitLeg({ knee: P.kneeF, ankle: P.ankF, foot: pitch(P.heelF, P.toeF) }, P.hip, true);
+  drawGaitTorso({ pelvis: P.hip, absPt: P.abs, shoulderPt: P.sho, neckBase: nb });
+  drawHead(nb, hTop);
+  drawGaitLeg({ knee: P.kneeN, ankle: P.ankN, foot: pitch(P.heelN, P.toeN) }, P.hip, false);
+  drawGaitArm({ elbow: P.elbN, wrist: P.handN }, P.sho, false);
+
+  // COM plumb vs current foot support — the whole point of the app, gamified.
+  let sL = Infinity, sR = -Infinity;
+  for (const p of [P.heelN, P.toeN, P.heelF, P.toeF]) {
+    if (p.y >= GROUND_Y - 9) { sL = Math.min(sL, p.x - 8); sR = Math.max(sR, p.x + 8); }
+  }
+  if (sL < sR) drawCOM(com, sL, sR);
+  else drawCOM(com, com.x - 1, com.x + 1);
+  ctx.restore();
+
+  // ---- HUD ----
+  const dist = qs.state === 'fallen' ? qs.fallDist : (P.hip.x - qs.x0) / PX_M;
+  ctx.font = 'bold 30px "Segoe UI", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#e7eef6';
+  ctx.fillText(dist.toFixed(1) + ' m', VIEW_W / 2, 44);
+  ctx.font = 'bold 12px "Segoe UI", sans-serif';
+  ctx.fillStyle = '#8fa3b8';
+  ctx.fillText('BEST ' + qwopBest.toFixed(1) + ' m', VIEW_W / 2, 62);
+
+  // Live key indicators.
+  const KEYPADS = [['q', 'Q', 18], ['w', 'W', 58], ['o', 'O', 126], ['p', 'P', 166]];
+  for (const [k, lbl, x] of KEYPADS) {
+    const on = qwopKeys[k];
+    ctx.fillStyle = on ? 'rgba(245,196,81,.92)' : 'rgba(10,15,22,.6)';
+    ctx.strokeStyle = on ? '#f5c451' : '#2c3a4c';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.roundRect(x, 18, 34, 34, 7); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = on ? '#04121f' : '#8fa3b8';
+    ctx.font = 'bold 16px "Segoe UI", sans-serif';
+    ctx.fillText(lbl, x + 17, 41);
+  }
+  ctx.font = 'bold 9px "Segoe UI", sans-serif';
+  ctx.fillStyle = '#5b6b7d';
+  ctx.fillText('THIGHS', 55, 64);
+  ctx.fillText('CALVES', 163, 64);
+
+  if (!qs.started && qs.state === 'run') {
+    ctx.font = 'bold 15px "Segoe UI", sans-serif';
+    ctx.fillStyle = '#8fa3b8';
+    ctx.fillText('Press Q, W, O or P to start', VIEW_W / 2, 92);
+  }
+
+  if (qs.state !== 'run') {
+    const bx = VIEW_W / 2 - 240;
+    ctx.fillStyle = 'rgba(10,15,22,.8)';
+    ctx.fillRect(bx, 120, 480, 104);
+    ctx.strokeStyle = qs.state === 'won' ? '#35d07f' : '#ff5d5d';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(bx, 120, 480, 104);
+    ctx.font = 'bold 26px "Segoe UI", sans-serif';
+    ctx.fillStyle = qs.state === 'won' ? '#35d07f' : '#ff5d5d';
+    ctx.fillText(qs.state === 'won' ? '100 m — CHAMPION!' : 'PARTICIPANT — ' + dist.toFixed(1) + ' m',
+                 VIEW_W / 2, 160);
+    ctx.font = '14px "Segoe UI", sans-serif';
+    ctx.fillStyle = '#e7eef6';
+    ctx.fillText(qs.state === 'won' ? 'Bad posture and all. Press R to run it back.'
+                                    : 'Everyone is a winner. Press R to try again.', VIEW_W / 2, 194);
+  }
+  ctx.textAlign = 'left';
+  updateQwopReadouts(dist);
+}
+
+function updateQwopReadouts(dist) {
+  document.getElementById('q_dist').textContent = dist.toFixed(1) + ' m';
+  document.getElementById('q_best').textContent = qwopBest.toFixed(1) + ' m';
+  document.getElementById('q_speed').textContent = qs.speed.toFixed(2) + ' m/s';
+  const el = document.getElementById('q_status');
+  el.textContent = qs.state === 'won' ? 'CHAMPION' : qs.state === 'fallen' ? 'FACE PLANT'
+    : qs.started ? 'RUNNING' : 'READY';
+  el.className = 'pill ' + (qs.state === 'fallen' ? 'bad' : 'good');
+}
+
+function qwopTick(ts) {
+  qwopRaf = null;
+  if (mode !== 'qwop') return;
+  const dt = Math.min(0.033, qwopLastT ? (ts - qwopLastT) / 1000 : 0.016);
+  qwopLastT = ts;
+  if (qs.started) qwopFrame(dt);   // QWOP rule: zero physics until the first input
+  drawQwop();
+  qwopRaf = requestAnimationFrame(qwopTick);
+}
+
+const QWOP_KEYMAP = { KeyQ: 'q', KeyW: 'w', KeyO: 'o', KeyP: 'p' };
+window.addEventListener('keydown', (e) => {
+  if (mode !== 'qwop') return;
+  const k = QWOP_KEYMAP[e.code];
+  if (k) {
+    qwopKeys[k] = true;
+    if (qs && qs.state === 'run') qs.started = true;
+    e.preventDefault();
+    return;
+  }
+  if (e.code === 'KeyR' || (e.code === 'Space' && qs && qs.state !== 'run')) {
+    resetQwop();
+    e.preventDefault();
+  }
+});
+window.addEventListener('keyup', (e) => {
+  const k = QWOP_KEYMAP[e.code];
+  if (k) qwopKeys[k] = false;
+});
+window.addEventListener('blur', () => {
+  qwopKeys.q = qwopKeys.w = qwopKeys.o = qwopKeys.p = false;
+});
+
+// ---- Gait animation loop & mode switching ----
+function gaitTick(ts) {
+  gaitRaf = null;
+  if (mode !== 'walk' && mode !== 'run') return;
+  const dt = gaitLastT ? Math.min(0.05, (ts - gaitLastT) / 1000) : 0.016;
+  gaitLastT = ts;
+  gaitDt = gaitPaused ? 0 : dt * slowMo;
+  if (!gaitPaused) {
+    gaitPhase = (gaitPhase + dt * slowMo * cadence[mode] / 120) % 1;   // 2 steps per stride
+    document.getElementById('s_phase').value = Math.round(gaitPhase * 100);
+    document.getElementById('v_phase').textContent = Math.round(gaitPhase * 100) + '%';
+  }
+  draw();
+  gaitRaf = requestAnimationFrame(gaitTick);
+}
+
+function setMode(m) {
+  mode = m;
+  const gait = m === 'walk' || m === 'run';
+  const qwop = m === 'qwop';
+  for (const id of ['Pose', 'Walk', 'Run', 'Qwop'])
+    document.getElementById('mode' + id).classList.toggle('on', id.toLowerCase() === m);
+  document.getElementById('gaitControls').style.display = gait ? '' : 'none';
+  document.getElementById('gaitReadout').style.display = gait ? '' : 'none';
+  document.getElementById('qwopReadout').style.display = qwop ? '' : 'none';
+  document.getElementById('poseReadout').style.display = (gait || qwop) ? 'none' : '';
+  document.getElementById('modeHint').textContent = MODE_HINTS[m];
+  document.getElementById('autoBalanceBtn').disabled = gait || qwop;
+  document.getElementById('fasciaBtn').disabled = qwop;
+  selected = null;
+  dragging = null;
+  if (gaitRaf !== null) { cancelAnimationFrame(gaitRaf); gaitRaf = null; }
+  if (qwopRaf !== null) { cancelAnimationFrame(qwopRaf); qwopRaf = null; }
+  if (gait) {
+    const g = GAITS[m];
+    const c = document.getElementById('s_cadence');
+    c.min = g.cadMin; c.max = g.cadMax; c.value = cadence[m];
+    document.getElementById('v_cadence').textContent = cadence[m];
+    computeGaitStats(g);
+    comTrace.length = 0;
+    liveTrunk.fill(null);
+    gaitLastT = 0;
+    gaitRaf = requestAnimationFrame(gaitTick);
+  } else if (qwop) {
+    resetQwop();
+    qwopLastT = 0;
+    qwopRaf = requestAnimationFrame(qwopTick);
+  } else {
+    draw();
+  }
+}
+
+let femme = false;
+const shirtColors = { guy: '#b5484d', girl: '#c95f8e' };
+function darken(hex, amt) {
+  const n = parseInt(hex.slice(1), 16);
+  const f = c => Math.round(c * (1 - amt));
+  return '#' + ((f(n >> 16 & 255) << 16) | (f(n >> 8 & 255) << 8) | f(n & 255))
+    .toString(16).padStart(6, '0');
+}
+const shirtColorInput = document.getElementById('shirtColor');
+shirtColorInput.addEventListener('input', () => {
+  shirtColors[femme ? 'girl' : 'guy'] = shirtColorInput.value;
+  draw();
+});
+const skinColorInput = document.getElementById('skinColor');
+skinColorInput.addEventListener('input', () => {
+  SKIN = skinColorInput.value;
+  SKIN_DK = darken(SKIN, 0.18);
+  draw();
+});
+const eyesBtn = document.getElementById('eyesBtn');
+eyesBtn.addEventListener('click', () => {
+  eyeIdx = (eyeIdx + 1) % EYEWEAR.length;
+  eyesBtn.textContent = 'Eyes: ' + EYEWEAR[eyeIdx];
+  draw();
+});
+const modelBtn = document.getElementById('modelBtn');
+modelBtn.addEventListener('click', () => {
+  femme = !femme;
+  modelBtn.textContent = 'Model: ' + (femme ? 'Girl' : 'Guy');
+  shirtColorInput.value = shirtColors[femme ? 'girl' : 'guy'];
+  updateHatBtn();
+  draw();
+});
+
+const hatBtn = document.getElementById('hatBtn');
+function updateHatBtn() {
+  const name = HATS[hatIdx];
+  hatBtn.textContent = 'Hat: ' + (name === 'Cowboy' && femme ? 'Cowgirl' : name);
+}
+hatBtn.addEventListener('click', () => {
+  hatIdx = (hatIdx + 1) % HATS.length;
+  updateHatBtn();
+  draw();
+});
+
+const autoBalanceBtn = document.getElementById('autoBalanceBtn');
+autoBalanceBtn.addEventListener('click', () => {
+  autoBalance = !autoBalance;
+  autoBalanceBtn.textContent = 'Auto-balance: ' + (autoBalance ? 'ON' : 'OFF');
+  autoBalanceBtn.classList.toggle('on', autoBalance);
+  heldJoint = null;
+  kickBalance();
+});
+
+const fasciaBtn = document.getElementById('fasciaBtn');
+fasciaBtn.addEventListener('click', () => {
+  fascia = !fascia;
+  fasciaBtn.textContent = 'Fascia Enforcement: ' + (fascia ? 'ON' : 'OFF');
+  fasciaBtn.classList.toggle('on', fascia);
+  if (fascia) fasciaRef = fasciaLengths();
+  heldJoint = null;
+  draw();
+});
+
+for (const id of ['Pose', 'Walk', 'Run', 'Qwop'])
+  document.getElementById('mode' + id).addEventListener('click', () => setMode(id.toLowerCase()));
+
+const pauseBtn = document.getElementById('pauseBtn');
+pauseBtn.addEventListener('click', () => {
+  gaitPaused = !gaitPaused;
+  pauseBtn.innerHTML = gaitPaused ? '&#9205; Play' : '&#9208; Pause';
+});
+window.addEventListener('keydown', (e) => {
+  if ((mode === 'walk' || mode === 'run') && e.code === 'Space') {
+    e.preventDefault();
+    pauseBtn.click();
+  }
+});
+
+const cadenceInput = document.getElementById('s_cadence');
+cadenceInput.addEventListener('input', () => {
+  if (mode === 'pose') return;
+  cadence[mode] = parseInt(cadenceInput.value, 10);
+  document.getElementById('v_cadence').textContent = cadenceInput.value;
+  computeGaitStats(GAITS[mode]);   // amplitude & stride depend on cadence
+});
+
+const slowmoInput = document.getElementById('s_slowmo');
+slowmoInput.addEventListener('input', () => {
+  slowMo = parseInt(slowmoInput.value, 10) / 100;
+  document.getElementById('v_slowmo').textContent = slowmoInput.value + '%';
+});
+
+const phaseInput = document.getElementById('s_phase');
+phaseInput.addEventListener('input', () => {
+  gaitPhase = parseInt(phaseInput.value, 10) / 100;
+  document.getElementById('v_phase').textContent = phaseInput.value + '%';
+});
+
+// Build sliders, top joint first so the list reads down the body like the figure.
+const slidersEl = document.getElementById('sliders');
+for (const j of [...JOINTS].reverse()) {
+  const row = document.createElement('div');
+  row.className = 'row';
+  row.innerHTML = `
+    <label for="s_${j.key}">${j.label}</label>
+    <input id="s_${j.key}" type="range" min="-40" max="40" step="1" value="0" />
+    <span class="val" id="v_${j.key}">0°</span>
+    <button id="z_${j.key}" class="mini" title="Zero this joint">0</button>`;
+  slidersEl.appendChild(row);
+  const input = row.querySelector('input');
+  input.addEventListener('input', () => {
+    angles[j.key] = parseInt(input.value, 10);
+    document.getElementById('v_' + j.key).textContent = angles[j.key] + '°';
+    document.querySelectorAll('[data-preset]').forEach(b => b.classList.remove('primary'));
+    heldJoint = j.key;
+    if (mode !== 'pose') computeGaitStats(GAITS[mode]);   // knee/ankle reshape stride & bounce
+    draw();
+    kickBalance();
+    kickFascia();
+  });
+  row.querySelector('button').addEventListener('click', () => {
+    angles[j.key] = 0;
+    input.value = 0;
+    document.getElementById('v_' + j.key).textContent = '0°';
+    document.querySelectorAll('[data-preset]').forEach(b => b.classList.remove('primary'));
+    heldJoint = j.key;
+    if (mode !== 'pose') computeGaitStats(GAITS[mode]);
+    draw();
+    kickBalance();
+    kickFascia();
+  });
+}
+
+// Height slider: solve the chain scale so the drawn crown lands on the target stature.
+const NECKBASE_PX = SEGMENTS.slice(0, 5).reduce((s, x) => s + x.len, 0);
+const CROWN_FIXED_PX = (GROUND_Y - ANKLE.y) + 60; // ankle rise + fixed-size head to crown
+const heightInput = document.getElementById('s_height');
+heightInput.addEventListener('input', () => {
+  const inches = parseInt(heightInput.value, 10);
+  document.getElementById('v_height').textContent =
+    Math.floor(inches / 12) + '\u2032' + (inches % 12) + '\u2033';
+  heightScale = (inches * 2.54 * PX_PER_CM - CROWN_FIXED_PX) / NECKBASE_PX;
+  rebaseFascia();
+  if (mode !== 'pose') computeGaitStats(GAITS[mode]);
+  if (mode === 'qwop') resetQwop();   // bone lengths changed
+  draw();
+  kickBalance();
+});
+
+function applyPreset(name) {
+  const p = PRESETS[name];
+  for (const j of JOINTS) {
+    angles[j.key] = p[j.key];
+    document.getElementById('s_' + j.key).value = p[j.key];
+    document.getElementById('v_' + j.key).textContent = p[j.key] + '°';
+  }
+  document.querySelectorAll('[data-preset]').forEach(b =>
+    b.classList.toggle('primary', b.dataset.preset === name));
+  heldJoint = null;
+  rebaseFascia();
+  if (mode !== 'pose') computeGaitStats(GAITS[mode]);
+  draw();
+  kickBalance();
+}
+document.querySelectorAll('[data-preset]').forEach(b =>
+  b.addEventListener('click', () => applyPreset(b.dataset.preset)));
+
+// Two user pose slots, persisted across sessions.
+function saveSlot(n) {
+  localStorage.setItem('posture.slot' + n, JSON.stringify(angles));
+  document.getElementById('pos' + n).classList.add('has');
+}
+function loadSlot(n) {
+  const raw = localStorage.getItem('posture.slot' + n);
+  if (!raw) return;
+  const p = JSON.parse(raw);
+  for (const j of JOINTS) angles[j.key] = p[j.key] || 0;
+  syncSliders();
+  document.querySelectorAll('[data-preset]').forEach(b => b.classList.remove('primary'));
+  heldJoint = null;
+  rebaseFascia();
+  if (mode !== 'pose') computeGaitStats(GAITS[mode]);
+  draw();
+  kickBalance();
+}
+for (const n of [1, 2]) {
+  document.getElementById('save' + n).addEventListener('click', () => saveSlot(n));
+  document.getElementById('pos' + n).addEventListener('click', () => loadSlot(n));
+  if (localStorage.getItem('posture.slot' + n)) document.getElementById('pos' + n).classList.add('has');
+}
+
+// Drag the knob above each joint — the lever arm makes rotation finer than grabbing the joint itself.
+// Distance of each handle along the segment above its joint.
+const HANDLE_D = [125, 120, 100, 110, 78, 82];
+
+// Knobs sit 45° clockwise off the segment direction — clear of the body for a better grab.
+const HANDLE_TILT = 45;
+
+// Seated thigh points backward, so its knob flips to the other side to stay clear of the lap.
+function handleTilt(fig, i) {
+  return (fig === 'seat' && i === 1) ? -HANDLE_TILT : HANDLE_TILT;
+}
+
+function handlePositions(pts, fig) {
+  const hs = [];
+  for (let i = 0; i < JOINTS.length; i++) {
+    const t = handleTilt(fig, i) * DEG;
+    const c = Math.cos(t), s = Math.sin(t);
+    const u = unit(pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y);
+    const rx = u.x * c - u.y * s, ry = u.x * s + u.y * c; // CW in screen coords
+    hs.push({ x: pts[i].x + rx * HANDLE_D[i], y: pts[i].y + ry * HANDLE_D[i] });
+  }
+  return hs;
+}
+
+let dragging = null;
+let selected = null;   // engaged joint index: left-click to engage, right-click to release
+
+function canvasPos(e) {
+  const r = canvas.getBoundingClientRect();
+  return { x: (e.clientX - r.left) * (VIEW_W / r.width),
+           y: (e.clientY - r.top) * (VIEW_H / r.height) };
+}
+
+function hitHandle(m, pts, fig) {
+  const hs = handlePositions(pts, fig);
+  for (let i = JOINTS.length - 1; i >= 0; i--) {
+    if (Math.hypot(m.x - hs[i].x, m.y - hs[i].y) < 16) return i;
+  }
+  return null;
+}
+
+function setJointAngle(i, deg) {
+  const key = JOINTS[i].key;
+  angles[key] = Math.max(-40, Math.min(40, deg));
+  document.getElementById('s_' + key).value = Math.round(angles[key]);
+  document.getElementById('v_' + key).textContent = Math.round(angles[key]) + '°';
+  document.querySelectorAll('[data-preset]').forEach(b => b.classList.remove('primary'));
+  heldJoint = key;
+  draw();
+  kickBalance();
+  kickFascia();
+}
+
+function chainFor(fig) {
+  return fig === 'seat' ? computeChain(SEAT_ANKLE, SEAT_OFFSETS) : computeChain();
+}
+function offsetsFor(fig) { return fig === 'seat' ? SEAT_OFFSETS : {}; }
+
+function hitAny(m) {
+  for (const fig of ['stand', 'seat']) {
+    const i = hitHandle(m, chainFor(fig).pts, fig);
+    if (i !== null) return { fig, i };
+  }
+  return null;
+}
+
+canvas.addEventListener('pointerdown', (e) => {
+  if (mode !== 'pose') return;
+  const m = canvasPos(e);
+  if (e.button === 2) {            // right-click: disengage
+    selected = null;
+    draw();
+    return;
+  }
+  const hit = hitAny(m);
+  if (hit !== null) {
+    selected = hit.i;              // left-click: engage for arrow keys
+    dragging = hit;
+    canvas.setPointerCapture(e.pointerId);
+    draw();
+  }
+});
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+window.addEventListener('keydown', (e) => {
+  if (selected === null) return;
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  e.preventDefault();
+  const step = e.key === 'ArrowRight' ? 1 : -1;   // right = forward lean
+  setJointAngle(selected, Math.round(angles[JOINTS[selected].key]) + step);
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (mode !== 'pose') { canvas.style.cursor = ''; return; }
+  const m = canvasPos(e);
+  if (dragging === null) {
+    canvas.style.cursor = hitAny(m) !== null ? 'grab' : '';
+    return;
+  }
+  canvas.style.cursor = 'grabbing';
+  const { pts } = chainFor(dragging.fig);
+  const pivot = pts[dragging.i];
+  // Pointer direction minus the knob tilt = the segment's global angle.
+  let globalAng = Math.atan2(m.x - pivot.x, -(m.y - pivot.y)) / DEG - handleTilt(dragging.fig, dragging.i);
+  // Subtract joints below plus this figure's base-pose offsets.
+  const offs = offsetsFor(dragging.fig);
+  let below = offs[JOINTS[dragging.i].key] || 0;
+  for (let i = 0; i < dragging.i; i++) below += (angles[JOINTS[i].key] || 0) + (offs[JOINTS[i].key] || 0);
+  let rel = Math.max(-40, Math.min(40, Math.round(globalAng - below)));
+  setJointAngle(dragging.i, rel);
+});
+canvas.addEventListener('pointerup', () => { dragging = null; canvas.style.cursor = ''; draw(); });
+
+// Autosave: remember pose, model, shirt colors, hat, and height on close; restore on launch.
+window.addEventListener('pagehide', () => {
+  localStorage.setItem('posture.last', JSON.stringify({
+    angles, femme, shirtColors, hatIdx, eyeIdx,
+    skin: SKIN,
+    heightIn: parseInt(heightInput.value, 10),
+    mode, cadence, qwopBest,
+  }));
+});
+
+fitCanvas();
+
+const lastState = localStorage.getItem('posture.last');
+if (lastState) {
+  const s = JSON.parse(lastState);
+  const p = s.angles || s; // older saves stored bare angles
+  for (const j of JOINTS) angles[j.key] = p[j.key] || 0;
+  if (typeof s.femme === 'boolean') femme = s.femme;
+  modelBtn.textContent = 'Model: ' + (femme ? 'Girl' : 'Guy');
+  if (s.shirtColors) Object.assign(shirtColors, s.shirtColors);
+  shirtColorInput.value = shirtColors[femme ? 'girl' : 'guy'];
+  if (Number.isInteger(s.hatIdx) && s.hatIdx >= 0 && s.hatIdx < HATS.length) hatIdx = s.hatIdx;
+  updateHatBtn();
+  if (Number.isInteger(s.eyeIdx) && s.eyeIdx >= 0 && s.eyeIdx < EYEWEAR.length) eyeIdx = s.eyeIdx;
+  eyesBtn.textContent = 'Eyes: ' + EYEWEAR[eyeIdx];
+  if (typeof s.skin === 'string') {
+    SKIN = s.skin;
+    SKIN_DK = s.skin === SKIN_BASE ? '#b89b78' : darken(SKIN, 0.18);
+    skinColorInput.value = SKIN;
+  }
+  if (Number.isFinite(s.heightIn)) {
+    heightInput.value = s.heightIn;
+    heightInput.dispatchEvent(new Event('input')); // sets label + heightScale, draws
+  }
+  if (s.cadence) Object.assign(cadence, s.cadence);
+  if (Number.isFinite(s.qwopBest)) qwopBest = s.qwopBest;
+  syncSliders();
+  draw();
+  kickBalance();
+  if (s.mode && s.mode !== 'pose' && (GAITS[s.mode] || s.mode === 'qwop')) setMode(s.mode);
+} else {
+  applyPreset('neutral');
+}</script>
+</body>
+</html>
